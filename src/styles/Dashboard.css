@@ -1,0 +1,82 @@
+/* Dashboard Layout */
+.dashboard {
+  display: flex;
+  height: 100vh;
+  background: var(--bg-secondary);
+  transition: background-color 0.3s ease;
+  overflow: hidden; /* Prevent any overflow issues */
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  overflow: auto;
+  min-width: 0; /* Important for flex container */
+}
+
+/* Chat Section */
+.chat-section {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  gap: 0;
+  overflow: auto;
+}
+
+.chat-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-primary);
+  overflow: hidden;
+  position: relative;
+  min-height: 0; /* Important for flex container to allow shrinking */
+}
+
+.chat-header-wrapper {
+  flex-shrink: 0;
+  padding: 12px 20px;
+  background: var(--bg-card);
+  border-bottom: 1px solid var(--border-primary);
+  max-height: 500px;
+  overflow-y: auto;
+  z-index: 50;
+}
+
+.no-room-selected {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  color: var(--text-tertiary);
+  text-align: center;
+  background: var(--bg-primary);
+  padding: 40px 24px;
+}
+
+.no-room-selected h2 {
+  font-size: 32px;
+  margin-bottom: 10px;
+  color: var(--primary-color);
+}
+
+.no-room-selected p {
+  font-size: 16px;
+  color: var(--text-tertiary);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .dashboard {
+    flex-direction: column;
+  }
+
+  .chat-section {
+    flex-direction: column;
+  }
+
+  .main-content {
+    flex-direction: column;
+  }
+}
