@@ -205,7 +205,7 @@ const RoomList = ({ onSelectRoom, selectedRoomId, onCreateRoom }) => {
   return (
     <div className="room-list">
       <div className="room-list-header">
-        <h3>Chat Rooms</h3>
+        <h3>🏠 Chat Rooms</h3>
         <button
           className="btn-new-room"
           onClick={() => {
@@ -222,7 +222,7 @@ const RoomList = ({ onSelectRoom, selectedRoomId, onCreateRoom }) => {
             setShowCreateModal(true);
           }}
         >
-          + Tạo phòng
+          ➕ Tạo phòng
         </button>
       </div>
 
@@ -265,7 +265,7 @@ const RoomList = ({ onSelectRoom, selectedRoomId, onCreateRoom }) => {
                     backgroundClip: "unset",
                   }}
                 >
-                  {room.name}
+                  {room.isPrivate ? "🔒" : "🏠"} {room.name}
                 </h4>
                 <p className="room-desc">{room.description}</p>
               </div>
@@ -347,10 +347,10 @@ const RoomList = ({ onSelectRoom, selectedRoomId, onCreateRoom }) => {
                 className="btn-cancel"
                 onClick={() => setShowCreateModal(false)}
               >
-                Hủy
+                ✕ Hủy
               </button>
               <button className="btn-primary" onClick={handleCreateRoom}>
-                Tạo phòng
+                ✅ Tạo phòng
               </button>
             </div>
           </div>

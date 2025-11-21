@@ -24,19 +24,19 @@ const Sidebar = ({ user, onTabChange, activeTab }) => {
           className={`nav-item ${activeTab === "chat" ? "active" : ""}`}
           onClick={() => onTabChange("chat")}
         >
-          Chat
+          💬 Chat
         </button>
         <button
           className={`nav-item ${activeTab === "rooms" ? "active" : ""}`}
           onClick={() => onTabChange("rooms")}
         >
-          Chat Rooms
+          🏠 Chat Rooms
         </button>
         <button
           className={`nav-item ${activeTab === "friends" ? "active" : ""}`}
           onClick={() => onTabChange("friends")}
         >
-          Friends
+          👥 Friends
         </button>
         <button
           className={`nav-item ${
@@ -44,7 +44,7 @@ const Sidebar = ({ user, onTabChange, activeTab }) => {
           }`}
           onClick={() => onTabChange("notifications")}
         >
-          Notifications
+          🔔 Notifications
         </button>
       </nav>
 
@@ -84,7 +84,7 @@ const Sidebar = ({ user, onTabChange, activeTab }) => {
                   setShowMenu(false);
                 }}
               >
-                Profile
+                👤 Profile
               </button>
               <button
                 onClick={() => {
@@ -92,10 +92,10 @@ const Sidebar = ({ user, onTabChange, activeTab }) => {
                   setShowMenu(false);
                 }}
               >
-                Settings
+                ⚙️ Settings
               </button>
               <button onClick={logout} className="logout-btn">
-                Logout
+                🚪 Logout
               </button>
             </div>
           )}

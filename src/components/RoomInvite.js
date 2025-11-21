@@ -138,7 +138,7 @@ const RoomInvite = ({ roomId, onClose, onInviteSent }) => {
       <div className="room-invite-content">
         <div className="room-invite-header">
           <div className="header-left">
-            <h2>Invite friends to room</h2>
+            <h2>📨 Invite friends to room</h2>
             <p className="header-subtitle">
               Chọn bạn bè để gửi lời mời tham gia
             </p>
@@ -334,12 +334,12 @@ const RoomInvite = ({ roomId, onClose, onInviteSent }) => {
               >
                 {inviting
                   ? "Sending..."
-                  : `Send ${selectedFriends.size} invites`}
+                  : `📨 Send ${selectedFriends.size} invites`}
               </button>
             )}
             {onClose && (
               <button className="cancel-btn" onClick={onClose}>
-                Đóng
+                ✕ Đóng
               </button>
             )}
           </div>

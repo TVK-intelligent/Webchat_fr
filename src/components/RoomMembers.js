@@ -62,7 +62,7 @@ const RoomMembers = ({ roomId, onClose, isOwner }) => {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>Members list ({members.length})</h3>
+          <h3>👥 Members list ({members.length})</h3>
           <button className="btn-close" onClick={onClose}>
             ✕
           </button>

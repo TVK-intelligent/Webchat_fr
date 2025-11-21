@@ -669,15 +669,19 @@ const ChatRoom = ({ roomId, roomName, onMessageSent }) => {
   return (
     <div className="chat-room-container">
       <div className="chat-header">
-        <h2>{roomName}</h2>
+        <h2>
+          💬 {isPrivateRoom ? "🔒" : "🏠"} {roomName}
+        </h2>
         <div className="header-right">
-          <span className="member-count">{roomMembers.length} thành viên</span>
+          <span className="member-count">
+            👥 {roomMembers.length} thành viên
+          </span>
           <button
             className="btn-invite"
             onClick={() => setShowMembersModal(true)}
             title="View member list"
           >
-            Members
+            👥 Members
           </button>
           {isRoomOwner && (
             <button
@@ -685,7 +689,7 @@ const ChatRoom = ({ roomId, roomName, onMessageSent }) => {
               onClick={() => setShowInviteModal(true)}
               title="Invite friends to room"
             >
-              Invite
+              📨 Invite
             </button>
           )}
           {!isRoomOwner &&
@@ -696,7 +700,7 @@ const ChatRoom = ({ roomId, roomName, onMessageSent }) => {
                 onClick={handleLeaveRoom}
                 title="Leave room"
               >
-                Leave
+                🚪 Leave
               </button>
             )}
         </div>
@@ -780,7 +784,7 @@ const ChatRoom = ({ roomId, roomName, onMessageSent }) => {
                         }}
                         title="Thu hồi tin nhắn (còn 2 phút)"
                       >
-                        Recall
+                        🔙 Recall
                       </button>
                     ) : (
                       <span style={{ color: "#999", fontSize: "12px" }}>
@@ -814,10 +818,10 @@ const ChatRoom = ({ roomId, roomName, onMessageSent }) => {
             onClick={() => setShowEmojiPicker(!showEmojiPicker)}
             title="Add emoji"
           >
-            Add emoji
+            😊 Add emoji
           </button>
           <button onClick={handleSendMessage} className="btn-send">
-            Send
+            📤 Send
           </button>
         </div>
         {showEmojiPicker && (

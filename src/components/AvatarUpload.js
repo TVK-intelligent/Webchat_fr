@@ -107,7 +107,7 @@ const AvatarUpload = ({ user, onAvatarUpdate }) => {
               className="avatar-input"
             />
             <label htmlFor="avatar-input" className="upload-btn-sm">
-              Chọn Ảnh
+              📷 Chọn Ảnh
             </label>
             <p className="upload-hint-sm">
               Tối đa 5MB
@@ -122,7 +122,7 @@ const AvatarUpload = ({ user, onAvatarUpdate }) => {
                 disabled={loading}
                 className="btn-upload-sm"
               >
-                {loading ? "Đang tải..." : "Tải Lên"}
+                {loading ? "Đang tải..." : "📤 Tải Lên"}
               </button>
             )}
           </div>

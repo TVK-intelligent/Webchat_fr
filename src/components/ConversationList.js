@@ -78,7 +78,7 @@ const ConversationList = ({
             id: `room_${room.id}`,
             roomId: room.id,
             type: "group",
-            displayName: room.name,
+            displayName: `${room.isPrivate ? "🔒" : "🏠"} ${room.name}`,
             avatar: room.avatarUrl,
             description: room.description,
             memberCount: room.members?.length || 0,
@@ -352,9 +352,9 @@ const ConversationList = ({
     <div className="conversation-list">
       {/* Header */}
       <div className="conversation-list-header">
-        <h3>Messages</h3>
+        <h3>💬 Messages</h3>
         <button className="btn-new-chat" title="New message">
-          New
+          ➕
         </button>
       </div>
 
@@ -362,7 +362,7 @@ const ConversationList = ({
       <div className="conversation-search">
         <input
           type="text"
-          placeholder="Tìm hội thoại..."
+          placeholder="🔍 Tìm hội thoại..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="search-input"

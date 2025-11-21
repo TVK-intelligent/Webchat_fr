@@ -23,7 +23,7 @@ const Login = ({ onSwitchToRegister }) => {
     <div className="auth-container">
       <div className="auth-box">
         <h1>Web Chat</h1>
-        <h2>Đăng Nhập</h2>
+        <h2>🔐 Đăng Nhập</h2>
 
         {error && <div className="error-message">{error}</div>}
 
@@ -51,7 +51,7 @@ const Login = ({ onSwitchToRegister }) => {
           </div>
 
           <button type="submit" disabled={loading} className="btn-primary">
-            {loading ? "Đang đăng nhập..." : "Đăng Nhập"}
+            {loading ? "Đang đăng nhập..." : "🔐 Đăng Nhập"}
           </button>
         </form>
 

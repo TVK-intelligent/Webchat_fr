@@ -130,13 +130,13 @@ const RoomListSidebar = ({ onSelectRoom, selectedRoomId }) => {
     <div className="room-list-sidebar">
       {/* Header */}
       <div className="room-list-header">
-        <h3>Chat Rooms</h3>
+        <h3>🏠 Chat Rooms</h3>
         <button
           className="btn-new-room"
           onClick={() => setShowCreateModal(true)}
           title="Create new room"
         >
-          New
+          ➕
         </button>
       </div>
 
@@ -169,7 +169,9 @@ const RoomListSidebar = ({ onSelectRoom, selectedRoomId }) => {
               onMouseLeave={() => setHoveredRoomId(null)}
             >
               <div className="room-info">
-                <h4>{room.name}</h4>
+                <h4>
+                  {room.isPrivate ? "🔒" : "🏠"} {room.name}
+                </h4>
                 <p className="room-desc">{room.description}</p>
               </div>
 

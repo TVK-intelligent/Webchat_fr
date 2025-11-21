@@ -46,7 +46,7 @@ const SearchUsers = ({ onClose }) => {
     loadFriendsAndRequests();
   }, []);
 
-  // Tìm kiếm người dùng
+  // 🔍 Tìm kiếm người dùng
   const performSearch = useCallback(async () => {
     try {
       setLoading(true);

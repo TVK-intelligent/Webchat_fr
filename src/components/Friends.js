@@ -141,12 +141,12 @@ const Friends = () => {
   return (
     <div className="friends-container">
       <div className="friends-header">
-        <h2>Friend List</h2>
+        <h2>👥 Friend List</h2>
         <button
           className="btn-search-friends"
           onClick={() => setShowSearchModal(true)}
         >
-          Search & Add Friend
+          🔍 Search & Add Friend
         </button>
       </div>
 
@@ -311,7 +311,9 @@ const Friends = () => {
                       className="btn-accept-pending"
                       onClick={() => handleAcceptRequest(invite.id)}
                       title="Chấp nhận"
-                    ></button>
+                    >
+                      ✅
+                    </button>
                     <button
                       className="btn-decline-pending"
                       onClick={() => handleDeclineRequest(invite.id)}

@@ -14,7 +14,7 @@ const Notifications = () => {
     notificationAudioService.isAudioEnabled()
   );
 
-  //  Load notifications on mount (REST API)
+  // 🔔 Load notifications on mount (REST API)
   useEffect(() => {
     const loadInitialNotifications = async () => {
       try {

@@ -32,7 +32,7 @@ const Settings = () => {
   return (
     <div className="settings-container">
       <div className="settings-header">
-        <h2>Settings</h2>
+        <h2>⚙️ Settings</h2>
         <p className="settings-subtitle">Tùy chỉnh ứng dụng theo ý muốn</p>
       </div>
 
@@ -263,7 +263,7 @@ const Settings = () => {
                     );
                   }}
                 >
-                  Reset
+                  🔄 Reset
                 </button>
               </div>
             </>
@@ -272,7 +272,7 @@ const Settings = () => {
 
         {/* Privacy Settings */}
         <div className="settings-section">
-          <h3>Privacy</h3>
+          <h3>🔒 Privacy</h3>
           <div className="setting-item">
             <div className="setting-info">
               <label>Hiển thị trạng thái online</label>
@@ -309,7 +309,7 @@ const Settings = () => {
 
         {/* Danger Zone */}
         <div className="settings-section danger-section">
-          <h3>Danger Zone</h3>
+          <h3>⚠️ Danger Zone</h3>
           <div className="setting-item">
             <div className="setting-info">
               <label>Đăng xuất</label>
@@ -318,7 +318,7 @@ const Settings = () => {
               </span>
             </div>
             <button className="btn-danger" onClick={logout}>
-              Logout
+              🚪 Logout
             </button>
           </div>
         </div>

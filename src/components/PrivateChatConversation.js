@@ -430,7 +430,7 @@ const PrivateChatConversation = ({
                       onClick={() => handleRecallMessage(msg.id)}
                       title="Recall message"
                     >
-                      Recall
+                      🔙 Recall
                     </button>
                   </div>
                 )}
@@ -458,7 +458,7 @@ const PrivateChatConversation = ({
             😊
           </button>
           <button onClick={handleSendMessage} className="btn-send">
-            Send
+            📤 Send
           </button>
         </div>
         {showEmojiPicker && (

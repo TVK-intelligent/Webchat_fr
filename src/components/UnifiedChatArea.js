@@ -8,7 +8,7 @@ const UnifiedChatArea = ({ conversation, onUnreadCleared, onMessageSent }) => {
     return (
       <div className="unified-chat-area empty">
         <div className="empty-state">
-          <h2>Welcome!</h2>
+          <h2>👋 Welcome!</h2>
           <p>Select a conversation to start chatting</p>
         </div>
       </div>

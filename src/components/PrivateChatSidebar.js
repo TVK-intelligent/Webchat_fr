@@ -54,13 +54,13 @@ const PrivateChatSidebar = () => {
   return (
     <div className="private-chat-sidebar">
       <div className="chat-sidebar-header">
-        <h3>Messages</h3>
+        <h3>💌 Messages</h3>
       </div>
 
       <div className="chat-search">
         <input
           type="text"
-          placeholder="Tìm bạn bè..."
+          placeholder="🔍 Tìm bạn bè..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           className="chat-search-input"

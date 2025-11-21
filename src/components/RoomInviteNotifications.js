@@ -89,7 +89,7 @@ const RoomInviteNotifications = () => {
     <div className="room-invite-notifications">
       <div className="notifications-header">
         <div className="header-content">
-          <h3>Room invitations</h3>
+          <h3>🎟️ Room invitations</h3>
           <span className="badge">{pendingInvites.length}</span>
         </div>
         <p className="header-subtitle">
@@ -184,13 +184,13 @@ const RoomInviteNotifications = () => {
                     className="action-btn accept-btn"
                     onClick={() => handleAcceptInvite(invite.id)}
                   >
-                    Accept
+                    ✅ Accept
                   </button>
                   <button
                     className="action-btn decline-btn"
                     onClick={() => handleDeclineInvite(invite.id)}
                   >
-                    Decline
+                    ❌ Decline
                   </button>
                 </div>
               )}

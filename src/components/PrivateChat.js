@@ -350,7 +350,7 @@ const PrivateChat = ({ friendId, friendName, onClose }) => {
             😊
           </button>
           <button onClick={handleSendMessage} className="btn-send">
-            Send
+            📤 Send
           </button>
         </div>
         {showEmojiPicker && (

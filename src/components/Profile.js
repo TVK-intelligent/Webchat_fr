@@ -123,7 +123,7 @@ const Profile = () => {
   return (
     <div className="profile-container">
       <div className="profile-header">
-        <h2>Personal Profile</h2>
+        <h2>👤 Personal Profile</h2>
         <p className="header-subtitle">Update your personal information</p>
       </div>
 
@@ -194,10 +194,10 @@ const Profile = () => {
             {/* Action Buttons */}
             <div className="profile-actions">
               <button type="submit" disabled={loading} className="btn-save">
-                {loading ? "Saving..." : "Save Changes"}
+                {loading ? "Saving..." : "💾 Save Changes"}
               </button>
               <button type="button" onClick={logout} className="btn-logout">
-                Logout
+                🚪 Logout
               </button>
             </div>
           </div>
