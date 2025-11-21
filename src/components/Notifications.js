@@ -1,88 +1,96 @@
 import React, { useState, useEffect } from "react";
 import { notificationService } from "../services/api";
-import { notificationSoundService } from "../services/notificationSound";
-import { desktopNotificationService } from "../services/desktopNotification";
+import { notificationAudioService } from "../services/notificationAudioService";
+import { subscribeToNotifications } from "../services/notificationWebSocket";
+import { useAuth } from "../context/AuthContext";
 import "../styles/Notifications.css";
 
 const Notifications = () => {
+  const { user } = useAuth();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all"); // all, read, unread
-  const [soundEnabled, setSoundEnabled] = useState(
-    notificationSoundService.isNotificationSoundEnabled()
+  const [audioEnabled, setAudioEnabled] = useState(
+    notificationAudioService.isAudioEnabled()
   );
-  const [desktopNotificationEnabled, setDesktopNotificationEnabled] = useState(
-    desktopNotificationService.isDesktopNotificationEnabled()
-  );
-  const notificationsRef = React.useRef([]);
 
-  const loadNotifications = React.useCallback(async () => {
-    try {
-      const response = await notificationService.getNotifications();
-      const newNotifications = response.data;
-
-      // Phát âm thanh khi có thông báo mới chưa đọc
-      const newUnreadCount = newNotifications.filter((n) => !n.read).length;
-      const prevUnreadCount = notificationsRef.current.filter(
-        (n) => !n.read
-      ).length;
-
-      // Nếu có thêm thông báo chưa đọc, phát âm thanh
-      if (newUnreadCount > prevUnreadCount) {
-        notificationSoundService.play();
-
-        // ✅ Phát Desktop Notification chỉ cho tin nhắn chưa đọc
-        if (desktopNotificationService.isDesktopNotificationEnabled()) {
-          // Tìm tất cả thông báo tin nhắn chưa đọc mới (không có trong prevNotifications)
-          const newUnreadMessages = newNotifications.filter(
-            (n) =>
-              !n.read &&
-              n.type === "MESSAGE" && // Chỉ loại MESSAGE
-              !notificationsRef.current.find((prev) => prev.id === n.id)
-          );
-
-          // Thông báo cho từng tin nhắn mới chưa đọc
-          newUnreadMessages.forEach((newMsg) => {
-            const senderName = newMsg.fromUser
-              ? newMsg.fromUser.displayName || newMsg.fromUser.username
-              : "Người gửi";
-            const messageContent =
-              newMsg.message || newMsg.content || "Tin nhắn mới";
-
-            console.log("📨 Desktop Notification for unread message:", {
-              messageId: newMsg.id,
-              sender: senderName,
-              content: messageContent,
-            });
-
-            // Truyền messageId để tránh trùng lặp
-            desktopNotificationService.notifyNewMessage(
-              senderName,
-              messageContent,
-              "Thông báo tin nhắn",
-              newMsg.id
-            );
-          });
-        }
+  //  Load notifications on mount (REST API)
+  useEffect(() => {
+    const loadInitialNotifications = async () => {
+      try {
+        const response = await notificationService.getNotifications();
+        setNotifications(response.data || []);
+        console.log("Loaded initial notifications:", response.data.length);
+      } catch (error) {
+        console.error("Error loading initial notifications:", error);
+      } finally {
+        setLoading(false);
       }
+    };
 
-      notificationsRef.current = newNotifications;
-      setNotifications(newNotifications);
-    } catch (error) {
-      console.error("❌ Lỗi tải thông báo:", error);
-    } finally {
-      setLoading(false);
-    }
+    loadInitialNotifications();
   }, []);
 
+  //  Sync audio enabled state with service
   useEffect(() => {
-    // Load once on mount
-    loadNotifications();
+    const isEnabled = notificationAudioService.isAudioEnabled();
+    setAudioEnabled(isEnabled);
+    console.log(" Audio service enabled state synced:", isEnabled);
 
-    // Refresh notifications mỗi 5 giây
-    const interval = setInterval(loadNotifications, 5000);
-    return () => clearInterval(interval);
-  }, [loadNotifications]);
+    // Listen for audio enabled changes from other components
+    const handleAudioEnabledChanged = (e) => {
+      setAudioEnabled(e.detail.enabled);
+      console.log("Audio enabled changed:", e.detail.enabled);
+    };
+
+    window.addEventListener("audioEnabledChanged", handleAudioEnabledChanged);
+    return () =>
+      window.removeEventListener(
+        "audioEnabledChanged",
+        handleAudioEnabledChanged
+      );
+  }, []);
+
+  //  Subscribe to real-time notifications via WebSocket
+  useEffect(() => {
+    if (!user?.id) {
+      console.warn("User ID not available");
+      return;
+    }
+
+    console.log(
+      "Notifications component subscribing to WebSocket (for UI updates only)"
+    );
+
+    // NOTE: Audio playback is now handled by useNotificationListener hook
+    // This component only updates the UI and displays notifications
+
+    const subscription = subscribeToNotifications(user.id, (notification) => {
+      console.log(
+        "New notification received in Notifications component:",
+        notification
+      );
+
+      //  Add to state (only new, not existing)
+      setNotifications((prev) => {
+        // Check if notification already exists
+        const exists = prev.some((n) => n.id === notification.id);
+        if (exists) {
+          console.log(`Notification ${notification.id} already exists`);
+          return prev;
+        }
+        console.log(`Adding new notification ${notification.id}`);
+        return [notification, ...prev];
+      });
+    });
+
+    return () => {
+      if (subscription) {
+        console.log("Unsubscribing from WebSocket notifications");
+        subscription.unsubscribe();
+      }
+    };
+  }, [user?.id]);
 
   const handleMarkAsRead = async (notificationId) => {
     try {
@@ -91,42 +99,14 @@ const Notifications = () => {
         prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
       );
     } catch (error) {
-      console.error("❌ Lỗi đánh dấu là đã đọc:", error);
+      console.error("Error marking as read:", error);
     }
   };
 
-  const handleToggleSound = () => {
-    const newState = !soundEnabled;
-    setSoundEnabled(newState);
-    notificationSoundService.setEnabled(newState);
-  };
-
-  const handleToggleDesktopNotification = async () => {
-    if (!desktopNotificationService.constructor.isSupported()) {
-      alert("⚠️ Trình duyệt của bạn không hỗ trợ Desktop Notifications");
-      return;
-    }
-
-    const newState = !desktopNotificationEnabled;
-
-    if (newState) {
-      // Yêu cầu quyền từ trình duyệt
-      const granted = await desktopNotificationService.requestPermission();
-      if (granted) {
-        setDesktopNotificationEnabled(true);
-        desktopNotificationService.setEnabled(true);
-        desktopNotificationService.notifyGeneral(
-          "✅ Desktop Notifications",
-          "Bạn đã bật Desktop Notifications"
-        );
-      } else {
-        alert("❌ Bạn đã từ chối quyền Desktop Notifications");
-        setDesktopNotificationEnabled(false);
-      }
-    } else {
-      setDesktopNotificationEnabled(false);
-      desktopNotificationService.setEnabled(false);
-    }
+  const handleToggleAudio = () => {
+    const newState = !audioEnabled;
+    setAudioEnabled(newState);
+    notificationAudioService.setEnabled(newState);
   };
 
   const handleDelete = async (notificationId) => {
@@ -134,7 +114,7 @@ const Notifications = () => {
       await notificationService.deleteNotification(notificationId);
       setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
     } catch (error) {
-      console.error("❌ Lỗi xóa thông báo:", error);
+      console.error("Error deleting notification:", error);
     }
   };
 
@@ -158,7 +138,7 @@ const Notifications = () => {
       case "MESSAGE":
         return "💌";
       case "USER_JOINED":
-        return "✅";
+        return "";
       case "USER_LEFT":
         return "❌";
       default:
@@ -221,37 +201,22 @@ const Notifications = () => {
   return (
     <div className="notifications-container">
       <div className="notifications-header">
-        <h2>🔔 Thông báo</h2>
+        <h2>Notifications</h2>
         <div className="header-controls">
           {unreadCount > 0 && (
             <span className="unread-badge">{unreadCount} chưa đọc</span>
           )}
           <button
             className={`btn-sound-toggle ${
-              soundEnabled ? "enabled" : "disabled"
+              audioEnabled ? "enabled" : "disabled"
             }`}
-            onClick={handleToggleSound}
+            onClick={handleToggleAudio}
             title={
-              soundEnabled ? "Tắt âm thanh thông báo" : "Bật âm thanh thông báo"
+              audioEnabled ? "Tắt âm thanh thông báo" : "Bật âm thanh thông báo"
             }
           >
-            {soundEnabled ? "🔔" : "🔇"}
-          </button>
-          {desktopNotificationService.constructor.isSupported() && (
-            <button
-              className={`btn-desktop-toggle ${
-                desktopNotificationEnabled ? "enabled" : "disabled"
-              }`}
-              onClick={handleToggleDesktopNotification}
-              title={
-                desktopNotificationEnabled
-                  ? "Tắt Desktop Notifications"
-                  : "Bật Desktop Notifications"
-              }
-            >
-              {desktopNotificationEnabled ? "🖥️" : "⛔"}
-            </button>
-          )}
+            {audioEnabled ? "Enabled" : "Muted"}
+          </button>{" "}
         </div>
       </div>
 
@@ -278,7 +243,7 @@ const Notifications = () => {
 
       {filteredNotifications.length === 0 ? (
         <div className="no-notifications">
-          <p>📭 Chưa có thông báo nào</p>
+          <p>No notifications</p>
         </div>
       ) : (
         <div className="notifications-list">
@@ -318,7 +283,7 @@ const Notifications = () => {
                   onClick={() => handleDelete(notification.id)}
                   title="Xóa"
                 >
-                  🗑️
+                  Delete
                 </button>
               </div>
             </div>

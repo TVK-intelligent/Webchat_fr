@@ -30,7 +30,7 @@ const RoomMembers = ({ roomId, onClose, isOwner }) => {
       try {
         await chatRoomService.kickMember(roomId, memberId);
         setMembers(members.filter((m) => m.user.id !== memberId));
-        console.log("✅ Đã đuổi thành viên khỏi phòng");
+        console.log("Member kicked from room successfully");
       } catch (err) {
         console.error("Lỗi đuổi thành viên:", err);
         setError(
@@ -62,7 +62,7 @@ const RoomMembers = ({ roomId, onClose, isOwner }) => {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h3>👥 Danh sách thành viên ({members.length})</h3>
+          <h3>Members list ({members.length})</h3>
           <button className="btn-close" onClick={onClose}>
             ✕
           </button>
@@ -82,7 +82,7 @@ const RoomMembers = ({ roomId, onClose, isOwner }) => {
                       <div className="member-name">
                         {member.user.displayName}
                         {member.role === "OWNER" && (
-                          <span className="badge badge-owner">👑 Chủ</span>
+                          <span className="badge badge-owner">Owner</span>
                         )}
                       </div>
                       <div className="member-username">

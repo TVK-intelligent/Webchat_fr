@@ -1,4 +1,4 @@
-# 🔊 Notification Sound Setup
+# Notification Sound Setup
 
 ## Hướng Dẫn Cấu Hình Âm Thanh Thông Báo
 
@@ -17,33 +17,33 @@
 #### Qua Settings (⚙️):
 
 1. Vào **Settings** (⚙️ Cài Đặt)
-2. Mục **🔔 Thông Báo**
+2. Mục ** Thông Báo**
 3. Bật **"Âm thanh thông báo"**
 4. Chọn loại âm thanh từ danh sách
 5. Điều chỉnh **âm lượng** bằng slider
 6. Nhấn **"Test"** để nghe thử
 
-#### Qua Notifications (🔔):
+#### Qua Notifications ():
 
-1. Vào **Notifications** (🔔 Thông báo)
-2. Nhấn nút **🔔/🔇** ở góc trên phải
+1. Vào **Notifications** ( Thông báo)
+2. Nhấn nút **/🔇** ở góc trên phải
 3. Nếu muốn tắt/bật âm thanh
 
 ### 3. **Tính Năng**
 
-✅ **Phát âm thanh tự động** khi có:
+**Phát âm thanh tự động** khi có:
 
 - Thông báo mới chưa đọc
 - Tin nhắn mới từ người khác
 
-✅ **Cấu hình linh hoạt**:
+  **Cấu hình linh hoạt**:
 
 - Bật/Tắt âm thanh nhanh chóng
 - Chọn kiểu âm thanh ưa thích
 - Điều chỉnh âm lượng
 - Test âm thanh trước khi lưu
 
-✅ **Lưu trữ cài đặt**:
+  **Lưu trữ cài đặt**:
 
 - Tất cả cài đặt được lưu vào `localStorage`
 - Khôi phục tự động khi tải lại trang

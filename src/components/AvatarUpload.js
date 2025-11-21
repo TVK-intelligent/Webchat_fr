@@ -1,14 +1,13 @@
 import React, { useState } from "react";
 import { userService } from "../services/api";
+import { getFullAvatarUrl } from "../utils/avatarUtils";
 import "../styles/AvatarUpload.css";
 
 const AvatarUpload = ({ user, onAvatarUpdate }) => {
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState(() => {
     if (user?.avatarUrl) {
-      return user.avatarUrl.startsWith("http")
-        ? user.avatarUrl
-        : `http://localhost:8081${user.avatarUrl}`;
+      return getFullAvatarUrl(user.avatarUrl);
     }
     return "";
   });
@@ -21,13 +20,13 @@ const AvatarUpload = ({ user, onAvatarUpdate }) => {
     if (file) {
       // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
-        setError("❌ Kích thước file không được vượt quá 5MB");
+        setError("Kích thước file không được vượt quá 5MB");
         return;
       }
 
       // Validate file type
       if (!file.type.startsWith("image/")) {
-        setError("❌ Vui lòng chọn file hình ảnh");
+        setError("Vui lòng chọn file hình ảnh");
         return;
       }
 
@@ -47,7 +46,7 @@ const AvatarUpload = ({ user, onAvatarUpdate }) => {
     e.preventDefault();
 
     if (!avatarFile) {
-      setError("❌ Vui lòng chọn ảnh");
+      setError("Vui lòng chọn ảnh");
       return;
     }
 
@@ -59,12 +58,12 @@ const AvatarUpload = ({ user, onAvatarUpdate }) => {
       const formData = new FormData();
       formData.append("avatar", avatarFile);
 
-      console.log("📤 Uploading avatar...");
+      console.log("Uploading avatar...");
       const response = await userService.uploadAvatar(user.id, formData);
 
-      console.log("✅ Avatar uploaded:", response.data);
+      console.log("Avatar uploaded:", response.data);
 
-      setMessage("✅ Cập nhật ảnh đại diện thành công!");
+      setMessage("Cập nhật ảnh đại diện thành công!");
       setAvatarFile(null);
 
       // Callback to parent to update user
@@ -74,7 +73,7 @@ const AvatarUpload = ({ user, onAvatarUpdate }) => {
     } catch (err) {
       const errorMsg =
         err.response?.data?.message || err.message || "Cập nhật ảnh thất bại";
-      setError("❌ " + errorMsg);
+      setError(errorMsg);
       console.error("Error uploading avatar:", err);
     } finally {
       setLoading(false);
@@ -108,7 +107,7 @@ const AvatarUpload = ({ user, onAvatarUpdate }) => {
               className="avatar-input"
             />
             <label htmlFor="avatar-input" className="upload-btn-sm">
-              📷 Chọn Ảnh
+              Chọn Ảnh
             </label>
             <p className="upload-hint-sm">
               Tối đa 5MB
@@ -123,7 +122,7 @@ const AvatarUpload = ({ user, onAvatarUpdate }) => {
                 disabled={loading}
                 className="btn-upload-sm"
               >
-                {loading ? "⏳ Đang tải..." : "📤 Tải Lên"}
+                {loading ? "Đang tải..." : "Tải Lên"}
               </button>
             )}
           </div>

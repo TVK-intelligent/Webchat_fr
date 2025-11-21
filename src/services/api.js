@@ -47,7 +47,7 @@ export const userService = {
   getAllUsers: () => apiClient.get("/users"),
 
   updateUserProfile: (userId, userData) => {
-    console.log("📝 updateUserProfile called with:", userId, userData);
+    console.log("updateUserProfile called with:", userId, userData);
     // Check if userData is FormData (for file upload)
     if (userData instanceof FormData) {
       // Don't set Content-Type header, let browser set it with boundary
@@ -63,8 +63,8 @@ export const userService = {
   deleteUser: (userId) => apiClient.delete(`/users/${userId}`),
 
   uploadAvatar: (userId, formData) => {
-    console.log("🖼️ uploadAvatar called with userId:", userId);
-    console.log("📋 FormData entries:", Array.from(formData.entries()));
+    console.log("uploadAvatar called with userId:", userId);
+    console.log("FormData entries:", Array.from(formData.entries()));
     // IMPORTANT: Don't set Content-Type header, let browser set multipart/form-data with boundary
     return apiClient.post(`/users/${userId}/avatar`, formData, {
       headers: {
@@ -145,6 +145,14 @@ export const messageService = {
   // 🆕 Đánh dấu tất cả tin nhắn trong phòng là đã đọc
   markAllAsRead: (roomId) =>
     apiClient.put(`/messages/room/${roomId}/mark-all-as-read`, {}),
+
+  // 🆕 Lấy tin nhắn riêng tư giữa 2 người dùng
+  getPrivateMessages: (recipientId) =>
+    apiClient.get(`/messages/private/${recipientId}`),
+
+  // 🆕 Lấy số tin nhắn chưa đọc từ một bạn bè
+  getUnreadPrivateMessageCount: (friendId) =>
+    apiClient.get(`/messages/private/${friendId}/unread-count`),
 };
 
 // ==================== FRIEND SERVICES ====================

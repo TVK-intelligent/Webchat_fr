@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { chatRoomService, messageService } from "../services/api";
-import { notificationSoundService } from "../services/notificationSound";
-import { desktopNotificationService } from "../services/desktopNotification";
+import { useMessageNotification } from "../hooks/useMessageNotification";
 import RoomInvite from "./RoomInvite";
 import RoomMembers from "./RoomMembers";
+import EmojiPicker from "emoji-picker-react";
 import {
   subscribeToRoomChat,
   sendChatMessage,
@@ -14,11 +14,13 @@ import {
   recallMessageWebSocket,
   subscribeToReadReceipt,
   subscribeToMemberEvents,
+  subscribeToMessageRecall,
 } from "../services/websocket";
 import "../styles/ChatRoom.css";
 
-const ChatRoom = ({ roomId, roomName }) => {
+const ChatRoom = ({ roomId, roomName, onMessageSent }) => {
   const { user } = useAuth();
+  const { handleNewMessage } = useMessageNotification(roomId, roomName);
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
@@ -28,44 +30,26 @@ const ChatRoom = ({ roomId, roomName }) => {
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showMembersModal, setShowMembersModal] = useState(false);
   const [isRoomOwner, setIsRoomOwner] = useState(false);
+  const [isPrivateRoom, setIsPrivateRoom] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef({});
   const readReceiptSubscriptionRef = useRef(null);
   const memberEventsSubscriptionRef = useRef(null);
-  const loadedMessageIdsRef = useRef(new Set()); // 📌 Track loaded messages to avoid duplicate notifications
-  const isPageVisibleRef = useRef(true); // 📌 Track if user is viewing the page
+  const emojiPickerRef = useRef(null);
 
-  // 📌 Monitor page visibility (user focus/blur)
+  // Mark all messages as read IMMEDIATELY when entering room
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        console.log("👋 User left the tab/browser");
-        isPageVisibleRef.current = false;
-      } else {
-        console.log("👁️ User returned to the tab/browser");
-        isPageVisibleRef.current = true;
-      }
-    };
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, []);
-
-  // ✅ Mark all messages as read IMMEDIATELY when entering room
-  useEffect(() => {
-    console.log("🚀 ChatRoom mounted for roomId:", roomId);
+    console.log("ChatRoom mounted for roomId:", roomId);
 
     // Call markAllAsRead as soon as possible, don't wait for loadMessages
     const markAsReadImmediately = async () => {
       try {
-        console.log("📝 Marking all messages as read in room", roomId);
+        console.log("Marking all messages as read in room", roomId);
         await messageService.markAllAsRead(roomId);
-        console.log("✅ Immediately marked all messages in room as read");
+        console.log("Immediately marked all messages in room as read");
       } catch (error) {
-        console.error("❌ Error marking all messages as read:", error);
+        console.error("Error marking all messages as read:", error);
       }
     };
 
@@ -75,7 +59,7 @@ const ChatRoom = ({ roomId, roomName }) => {
     // Subscribe to read receipt events to update UI when other users mark read
     const subscription = subscribeToReadReceipt(roomId, (readReceipt) => {
       console.log(
-        `📬 Read receipt in room ${roomId} from user ${readReceipt.userId}:`,
+        `Read receipt in room ${roomId} from user ${readReceipt.userId}:`,
         readReceipt
       );
       // Just log - the badge will be updated by RoomList's subscription
@@ -91,34 +75,42 @@ const ChatRoom = ({ roomId, roomName }) => {
 
   // Load messages khi component mount
   useEffect(() => {
-    // 📌 Reset loaded message IDs khi đổi phòng
-    loadedMessageIdsRef.current.clear();
-
     const loadMessages = async () => {
       try {
         const response = await messageService.getMessages(roomId);
         // Normalize messages từ REST API (có createdAt) và WebSocket (có timestamp)
-        const processedMessages = response.data.map((msg) => ({
-          ...msg,
-          timestamp: msg.timestamp || msg.createdAt, // Normalize timestamp field
-          senderUsername: msg.sender?.username || msg.senderUsername, // Get from sender object or field
-          senderDisplayName: msg.sender?.displayName || msg.senderDisplayName, // Get from sender object or field
-          content: msg.recalled ? "Message recalled" : msg.content,
-        }));
-        setMessages(processedMessages);
+        const processedMessages = response.data.map((msg) => {
+          const normalized = {
+            ...msg,
+            timestamp: msg.timestamp || msg.createdAt, // Normalize timestamp field
+            senderUsername: msg.sender?.username || msg.senderUsername, // Get from sender object or field
+            senderDisplayName: msg.sender?.displayName || msg.senderDisplayName, // Get from sender object or field
+          };
 
-        // 📌 Lưu tất cả messageIds đã load từ server để tránh gửi notification cho tin nhắn cũ
-        processedMessages.forEach((msg) => {
-          loadedMessageIdsRef.current.add(msg.id);
+          // Xử lý tin nhắn đã thu hồi
+          if (msg.recalled) {
+            normalized.content = "🔙 Tin nhắn đã bị thu hồi";
+            normalized.recalled = true;
+            // Lưu trữ thông tin người thu hồi nếu có
+            normalized.recalledBySenderDisplayName =
+              msg.recalledBySenderDisplayName || msg.senderDisplayName;
+            normalized.recalledBySenderUsername =
+              msg.recalledBySenderUsername || msg.senderUsername;
+          } else {
+            normalized.content = msg.content;
+            normalized.recalled = false;
+          }
+
+          return normalized;
         });
+        setMessages(processedMessages);
         console.log(
-          `✅ Loaded ${processedMessages.length} messages, preventing duplicate notifications for:`,
-          Array.from(loadedMessageIdsRef.current)
+          `Loaded ${processedMessages.length} messages for room ${roomId}`
         );
 
         setLoading(false);
       } catch (error) {
-        console.error("❌ Lỗi tải tin nhắn:", error);
+        console.error("Lỗi tải tin nhắn:", error);
         setLoading(false);
       }
     };
@@ -131,13 +123,17 @@ const ChatRoom = ({ roomId, roomName }) => {
         // Lấy room info để check xem user có phải chủ phòng không
         const roomResponse = await chatRoomService.getRoomById(roomId);
         setIsRoomOwner(roomResponse.data?.owner?.id === user.id);
+        setIsPrivateRoom(roomResponse.data?.isPrivate || false);
+
         console.log(
-          `👑 Room owner: ${roomResponse.data?.owner?.id}, Current user: ${
+          `Room owner: ${roomResponse.data?.owner?.id}, Current user: ${
             user.id
-          }, IsOwner: ${roomResponse.data?.owner?.id === user.id}`
+          }, IsOwner: ${roomResponse.data?.owner?.id === user.id}, IsPrivate: ${
+            roomResponse.data?.isPrivate
+          }`
         );
       } catch (error) {
-        console.error("❌ Lỗi tải thành viên phòng:", error);
+        console.error("Lỗi tải thành viên phòng:", error);
       }
     };
 
@@ -148,18 +144,16 @@ const ChatRoom = ({ roomId, roomName }) => {
   // Subscribe to member events (leave/kick)
   useEffect(() => {
     const subscription = subscribeToMemberEvents(roomId, (memberEvent) => {
-      console.log("👥 Member event received:", memberEvent);
+      console.log("Member event received:", memberEvent);
 
       if (memberEvent.reason === "left") {
-        console.log(`✅ Member ${memberEvent.username} left the room`);
+        console.log(`Member ${memberEvent.username} left the room`);
       } else if (memberEvent.reason === "kicked") {
-        console.log(
-          `🚫 Member ${memberEvent.username} was kicked from the room`
-        );
+        console.log(`Member ${memberEvent.username} was kicked from the room`);
 
         // Nếu chính mình bị đuổi, hiển thị thông báo và rời khỏi phòng
         if (memberEvent.userId === user.id) {
-          alert("❌ Bạn đã bị đuổi khỏi phòng này!");
+          alert("Bạn đã bị đuổi khỏi phòng này!");
           // Navigate back to room list (sẽ được xử lý ở component cha)
           window.location.hash = "/";
           window.location.reload();
@@ -170,7 +164,7 @@ const ChatRoom = ({ roomId, roomName }) => {
       chatRoomService
         .getRoomMembers(roomId)
         .then((res) => setRoomMembers(res.data))
-        .catch((err) => console.error("Lỗi reload thành viên:", err));
+        .catch((err) => console.error("Error reloading members:", err));
     });
 
     memberEventsSubscriptionRef.current = subscription;
@@ -185,74 +179,23 @@ const ChatRoom = ({ roomId, roomName }) => {
   // Subscribe to room chat messages
   useEffect(() => {
     const subscription = subscribeToRoomChat(roomId, (newMessage) => {
-      console.log("📨 New message received from WebSocket:", newMessage);
+      console.log("New message received from WebSocket:", newMessage);
 
-      // Phát âm thanh khi có tin nhắn mới từ người khác
+      // Handle notification (sound + desktop notification)
+      handleNewMessage(newMessage);
+
+      // Auto mark new message as read when it arrives (user is viewing room)
       if (newMessage.senderId !== user.id) {
-        notificationSoundService.play();
-
-        // 📌 Chỉ gửi desktop notification nếu message này chưa được load trước đó
-        const isNewMessage = !loadedMessageIdsRef.current.has(newMessage.id);
-
-        if (isNewMessage) {
-          console.log(
-            `✅ Message ${newMessage.id} is NEW (not in loaded messages), sending desktop notification`
-          );
-
-          // 📌 Chỉ gửi notification khi user KHÔNG xem tab
-          const shouldNotify = !isPageVisibleRef.current;
-
-          if (shouldNotify && !newMessage.read) {
-            const senderName =
-              newMessage.senderDisplayName ||
-              newMessage.senderUsername ||
-              "Người dùng";
-            const messageContent =
-              newMessage.content || "[Tin nhắn không có nội dung]";
-
-            console.log("🖥️ Desktop Notification check:");
-            console.log("   Page visible:", isPageVisibleRef.current);
-            console.log("   Should notify:", shouldNotify);
-            console.log(
-              "   Enabled:",
-              desktopNotificationService.isDesktopNotificationEnabled()
-            );
-            console.log("   Sender:", senderName);
-            console.log("   Content:", messageContent);
-            console.log("   Message ID:", newMessage.id);
-            console.log("   Is unread:", !newMessage.read);
-
-            // Truyền messageId để tránh trùng lặp notification
-            desktopNotificationService.notifyNewMessage(
-              senderName,
-              messageContent,
-              roomName,
-              newMessage.id
-            );
-
-            console.log("✅ Desktop notification called");
-          } else if (!shouldNotify) {
-            console.log(
-              "ℹ️ User is viewing page, skipping desktop notification (user can see message in app)"
-            );
-          }
-        } else {
-          console.log(
-            `⏭️ Message ${newMessage.id} was already loaded, skipping desktop notification`
-          );
-        }
-
-        // ✅ Auto mark new message as read when it arrives (user is viewing room)
         messageService
           .markAsRead(newMessage.id)
           .then(() => {
             console.log(
-              `✅ Auto-marked new message ${newMessage.id} as read (user is in room)`
+              `Auto-marked new message ${newMessage.id} as read (user is in room)`
             );
           })
           .catch((error) => {
             console.warn(
-              `⚠️ Failed to auto-mark message ${newMessage.id} as read:`,
+              `Failed to auto-mark message ${newMessage.id} as read:`,
               error
             );
           });
@@ -268,25 +211,20 @@ const ChatRoom = ({ roomId, roomName }) => {
           newMessage.senderDisplayName || newMessage.sender?.displayName,
       };
 
-      // 📌 Lưu message ID vào set để biết nó đã được load
-      loadedMessageIdsRef.current.add(newMessage.id);
-
       // Handle recall events that come through /topic/room/{roomId}
       // (backend may send them here for compatibility)
       if (
         newMessage.recalled === true &&
         newMessage.content === "Message recalled"
       ) {
-        console.log(
-          "🔙 Recall event received from room channel, will process it"
-        );
+        console.log("Recall event received from room channel, will process it");
         // Don't skip - process it immediately
         const messageId = newMessage.id;
         setMessages((prev) =>
           prev.map((msg) => {
             if (String(msg.id) === String(messageId)) {
               console.log(
-                `✅ Updating message ${messageId} to recalled status (via room channel)`
+                `Updating message ${messageId} to recalled status (via room channel)`
               );
               return {
                 ...msg,
@@ -308,7 +246,7 @@ const ChatRoom = ({ roomId, roomName }) => {
 
         if (existingMessageIndex !== -1) {
           // Cập nhật tin nhắn đã tồn tại (recalled, edited, etc)
-          console.log("🔄 Updating existing message:", normalizedMessage.id);
+          console.log("Updating existing message:", normalizedMessage.id);
           const updated = [...prev];
           updated[existingMessageIndex] = {
             ...normalizedMessage,
@@ -325,7 +263,7 @@ const ChatRoom = ({ roomId, roomName }) => {
         if (hasPendingFromSender) {
           // Replace pending message bằng message từ server
           console.log(
-            "✅ Replacing pending message with server response:",
+            "Replacing pending message with server response:",
             normalizedMessage.id
           );
           return prev.map((msg) => {
@@ -340,7 +278,7 @@ const ChatRoom = ({ roomId, roomName }) => {
         } else {
           // Đây là message từ người khác hoặc không phải pending
           console.log(
-            "➕ Adding new message from other user:",
+            "Adding new message from other user:",
             normalizedMessage.senderUsername
           );
           return [...prev, { ...normalizedMessage, pending: false }];
@@ -353,7 +291,7 @@ const ChatRoom = ({ roomId, roomName }) => {
         subscription.unsubscribe();
       }
     };
-  }, [roomId, user.id, roomName]);
+  }, [roomId, user.id, roomName, handleNewMessage]);
 
   // Subscribe to typing indicators
   useEffect(() => {
@@ -379,13 +317,156 @@ const ChatRoom = ({ roomId, roomName }) => {
     };
   }, [roomId]);
 
-  // Note: Recall events are now handled through subscribeToRoomChat
-  // No need for separate /topic/recall/room/{roomId} subscription
-
-  // Scroll to bottom
+  // Subscribe to message recall events
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    console.log("Setting up message recall subscription for room:", roomId);
+
+    const subscription = subscribeToMessageRecall(roomId, (recallEvent) => {
+      console.log("Message recall event received:", recallEvent);
+
+      // Kiểm tra xem đây có phải event cho người thu hồi không
+      const isForRecaller = recallEvent.forRecaller === true;
+      console.log("isForRecaller:", isForRecaller);
+
+      // Nếu đây là event cho người thu hồi, chỉ cần update tin nhắn mà không cần notification
+      if (isForRecaller && recallEvent.senderId === user.id) {
+        console.log(
+          "This is for recaller - updating message without notification"
+        );
+        const messageId = recallEvent.messageId || recallEvent.id;
+
+        setMessages((prev) => {
+          const updated = [...prev];
+          const index = updated.findIndex(
+            (msg) => String(msg.id) === String(messageId)
+          );
+
+          if (index !== -1) {
+            console.log(`Updating recalled message ${messageId} for recaller`);
+            updated[index] = {
+              ...updated[index],
+              content: "Message recalled",
+              recalled: true,
+            };
+          }
+          return updated;
+        });
+        return; // Không hiển thị notification cho người thu hồi
+      }
+
+      // Đối với những người khác, hiển thị thông báo chi tiết
+      if (!isForRecaller || recallEvent.senderId !== user.id) {
+        console.log(
+          "This is for other members - showing detailed notification"
+        );
+        const messageId = recallEvent.messageId || recallEvent.id;
+        console.log(
+          "Looking for messageId:",
+          messageId,
+          "Type:",
+          typeof messageId
+        );
+
+        // Update message to show recalled status
+        setMessages((prev) => {
+          console.log("Current messages count:", prev.length);
+          let updated = [...prev];
+          let foundByRealId = false;
+
+          // First, try to find by real message ID
+          const realIdIndex = updated.findIndex(
+            (msg) => String(msg.id) === String(messageId) && !msg.pending
+          );
+          if (realIdIndex !== -1) {
+            console.log(`Found message by real ID: ${messageId}`);
+            const oldMsg = updated[realIdIndex];
+            updated[realIdIndex] = {
+              ...oldMsg,
+              content: "🔙 Tin nhắn đã bị thu hồi",
+              recalled: true,
+              // Preserve sender info (original sender)
+              senderDisplayName: oldMsg.senderDisplayName || "Unknown",
+              senderUsername: oldMsg.senderUsername || "Unknown",
+              // Store who recalled this message (from recallEvent)
+              recalledBySenderDisplayName: recallEvent.senderDisplayName,
+              recalledBySenderUsername: recallEvent.senderUsername,
+            };
+            foundByRealId = true;
+          }
+
+          // If not found by real ID, try to find pending message from same sender
+          if (!foundByRealId && recallEvent.senderId) {
+            const pendingIndex = updated.findIndex(
+              (msg) =>
+                msg.pending &&
+                msg.senderId === recallEvent.senderId &&
+                msg.roomId === roomId
+            );
+            if (pendingIndex !== -1) {
+              console.log(
+                `Found pending message from sender ${recallEvent.senderId}, marking as recalled`
+              );
+              const oldMsg = updated[pendingIndex];
+              updated[pendingIndex] = {
+                ...oldMsg,
+                content: "Message recalled",
+                recalled: true,
+                // Update with real ID from backend and preserve sender info
+                id: messageId,
+                senderDisplayName: oldMsg.senderDisplayName || "Unknown",
+                senderUsername: oldMsg.senderUsername || "Unknown",
+                // Store who recalled this message (from recallEvent)
+                recalledBySenderDisplayName: recallEvent.senderDisplayName,
+                recalledBySenderUsername: recallEvent.senderUsername,
+              };
+            } else {
+              console.warn(
+                `No pending message found from sender ${recallEvent.senderId}`
+              );
+            }
+          } else if (!foundByRealId) {
+            console.warn(
+              `Message not found by real ID ${messageId} and no sender ID in event`
+            );
+          }
+
+          return updated;
+        });
+      }
+    });
+
+    console.log("Recall subscription set up, subscription:", subscription);
+
+    return () => {
+      console.log("Cleaning up recall subscription for room:", roomId);
+      if (subscription && subscription.unsubscribe) {
+        subscription.unsubscribe();
+      }
+    };
+  }, [roomId, user.id]);
+
+  // Note: Recall events are now handled through subscribeToMessageRecall
+
+  // Scroll to bottom - luôn scroll xuống cuối
+  useEffect(() => {
+    const container = document.querySelector(".messages-container");
+    if (container) {
+      // Luôn scroll xuống dưới cùng
+      setTimeout(() => {
+        container.scrollTop = container.scrollHeight;
+      }, 0);
+    }
   }, [messages]);
+
+  // Handle click outside emoji picker
+  useEffect(() => {
+    if (showEmojiPicker) {
+      document.addEventListener("click", handleClickOutsideEmojiPicker);
+      return () => {
+        document.removeEventListener("click", handleClickOutsideEmojiPicker);
+      };
+    }
+  }, [showEmojiPicker]);
 
   const handleSendMessage = async () => {
     if (!input.trim()) return;
@@ -414,33 +495,35 @@ const ChatRoom = ({ roomId, roomName }) => {
       return updated;
     });
 
-    try {
-      // 🔊 Phát âm thanh khi gửi tin nhắn
-      notificationSoundService.play();
+    //  Notify parent that message was sent (move conversation to top)
+    if (onMessageSent) {
+      onMessageSent("room", roomId);
+    }
 
-      // ⏳ Đợi WebSocket kết nối
+    try {
+      // Wait for WebSocket connection
       const isConnected = await waitForWebSocketConnection(5000);
 
       if (isConnected) {
-        // 📤 Gửi CHỈ qua WebSocket
-        console.log("📤 Sending message via WebSocket...");
+        // Send ONLY via WebSocket
+        console.log("Sending message via WebSocket...");
         sendChatMessage(roomId, user.id, messageContent);
-        console.log("✅ Message sent via WebSocket");
+        console.log("Message sent via WebSocket");
 
-        // WebSocket subscription sẽ nhận message từ server
-        // và tự động replace pending message
+        // WebSocket subscription will receive message from server
+        // and automatically replace pending message
       } else {
-        console.error("❌ WebSocket connection failed");
-        // Remove optimistic message nếu lỗi
+        console.error("WebSocket connection failed");
+        // Remove optimistic message if error
         setMessages((prev) => prev.filter((msg) => msg.id !== messageId));
-        alert("❌ Lỗi kết nối WebSocket. Không thể gửi tin nhắn.");
+        alert("WebSocket connection error. Cannot send message.");
       }
     } catch (error) {
-      console.error("❌ Error sending message:", error);
-      // Remove optimistic message nếu lỗi
+      console.error("Error sending message:", error);
+      // Remove optimistic message if error
       setMessages((prev) => prev.filter((msg) => msg.id !== messageId));
       alert(
-        "❌ Lỗi gửi tin nhắn: " +
+        "Error sending message: " +
           (error.response?.data?.message || error.message)
       );
     }
@@ -474,22 +557,22 @@ const ChatRoom = ({ roomId, roomName }) => {
   const handleRecallMessage = async (messageId) => {
     try {
       if (!messageId) {
-        console.error("❌ Invalid messageId:", messageId);
-        alert("Lỗi: ID tin nhắn không hợp lệ");
+        console.error("Invalid messageId:", messageId);
+        alert("Error: Invalid message ID");
         return;
       }
 
-      console.log("🔙 Attempting to recall message:", messageId);
+      console.log("Attempting to recall message:", messageId);
 
-      // Chỉ gửi WebSocket message - backend sẽ xử lý database và broadcast
+      // Send WebSocket message only - backend will handle database and broadcast
       await recallMessageWebSocket(roomId, messageId);
-      console.log("✅ Message recall request sent via WebSocket");
+      console.log("Message recall request sent via WebSocket");
 
-      // UI sẽ được update khi nhận WebSocket response từ server
+      // UI will be updated when receiving WebSocket response from server
     } catch (error) {
-      console.error("❌ Error recalling message:", error);
+      console.error("Error recalling message:", error);
       alert(
-        "Lỗi thu hồi tin nhắn: " +
+        "Error recalling message: " +
           (error.response?.data?.message || error.message || error.toString())
       );
     }
@@ -498,30 +581,45 @@ const ChatRoom = ({ roomId, roomName }) => {
 
   const canRecallMessage = (message) => {
     if (!message) {
-      console.log("❌ canRecallMessage: message is empty");
+      console.log("canRecallMessage: message is empty");
       return false;
     }
-    // Chỉ người gửi mới có thể thu hồi
+    // Only sender can recall
     if (message.senderId !== user.id) {
-      console.log("❌ canRecallMessage: not sender", message.senderId, user.id);
+      console.log("canRecallMessage: not sender", message.senderId, user.id);
       return false;
     }
-    // Không thu hồi tin nhắn đã bị gọi lại
+    // Don't recall already recalled message
     if (message.recalled) {
-      console.log("❌ canRecallMessage: already recalled");
+      console.log("canRecallMessage: already recalled");
       return false;
     }
-    // Chỉ thu hồi tin nhắn trong 2 phút
+    // Only recall message within 2 minutes
     const messageTime = new Date(message.timestamp);
     const currentTime = new Date();
     const diffInMinutes = (currentTime - messageTime) / (1000 * 60);
     const canRecall = diffInMinutes <= 2;
     console.log(
-      `📊 canRecallMessage: ${canRecall}, diff=${diffInMinutes.toFixed(
+      `canRecallMessage: ${canRecall}, diff=${diffInMinutes.toFixed(
         2
       )}min, timestamp=${message.timestamp}`
     );
     return canRecall;
+  };
+
+  const handleEmojiClick = (emojiObject) => {
+    setInput((prevInput) => prevInput + emojiObject.emoji);
+    setShowEmojiPicker(false);
+  };
+
+  const handleClickOutsideEmojiPicker = (e) => {
+    if (
+      emojiPickerRef.current &&
+      !emojiPickerRef.current.contains(e.target) &&
+      !e.target.classList.contains("btn-emoji")
+    ) {
+      setShowEmojiPicker(false);
+    }
   };
 
   const formatTime = (timestamp) => {
@@ -552,14 +650,14 @@ const ChatRoom = ({ roomId, roomName }) => {
       try {
         console.log("🚪 Attempting to leave room:", roomId);
         await chatRoomService.leaveRoom(roomId);
-        console.log("✅ Left room successfully");
-        alert("✅ Bạn đã rời khỏi phòng này");
+        console.log("Left room successfully");
+        alert("You left the room successfully");
         // Navigate back to room list
         window.location.hash = "/";
         window.location.reload();
       } catch (error) {
-        console.error("❌ Error leaving room:", error);
-        alert("❌ " + (error.response?.data?.error || error.message));
+        console.error("Error leaving room:", error);
+        alert(error.response?.data?.error || error.message);
       }
     }
   };
@@ -577,26 +675,30 @@ const ChatRoom = ({ roomId, roomName }) => {
           <button
             className="btn-invite"
             onClick={() => setShowMembersModal(true)}
-            title="Xem danh sách thành viên"
+            title="View member list"
           >
-            👥 Thành viên
+            Members
           </button>
-          <button
-            className="btn-invite"
-            onClick={() => setShowInviteModal(true)}
-            title="Mời bạn vào phòng"
-          >
-            ➕ Mời
-          </button>
-          {!isRoomOwner && (
+          {isRoomOwner && (
             <button
-              className="btn-leave"
-              onClick={handleLeaveRoom}
-              title="Rời phòng"
+              className="btn-invite"
+              onClick={() => setShowInviteModal(true)}
+              title="Invite friends to room"
             >
-              � Rời
+              Invite
             </button>
           )}
+          {!isRoomOwner &&
+            isPrivateRoom &&
+            roomMembers.some((m) => m.id === user.id) && (
+              <button
+                className="btn-leave"
+                onClick={handleLeaveRoom}
+                title="Leave room"
+              >
+                Leave
+              </button>
+            )}
         </div>
       </div>
 
@@ -624,7 +726,7 @@ const ChatRoom = ({ roomId, roomName }) => {
       <div className="messages-container">
         {messages.length === 0 ? (
           <div className="no-messages">
-            <p>📭 Không có tin nhắn nào</p>
+            <p>No messages</p>
           </div>
         ) : (
           messages.map((msg, index) => (
@@ -642,10 +744,23 @@ const ChatRoom = ({ roomId, roomName }) => {
                 <strong>
                   {msg.senderDisplayName || msg.senderUsername || "Unknown"}
                 </strong>
-                <p className={msg.recalled ? "recalled" : ""}>{msg.content}</p>
+                <p className={msg.recalled ? "recalled" : ""}>
+                  {msg.content}
+                  {msg.recalled &&
+                    (msg.recalledBySenderDisplayName ||
+                      msg.recalledBySenderUsername) && (
+                      <span className="recall-info">
+                        {" "}
+                        (Thu hồi bởi{" "}
+                        {msg.recalledBySenderDisplayName ||
+                          msg.recalledBySenderUsername}
+                        )
+                      </span>
+                    )}
+                </p>
                 <span className="message-time">
                   {msg.timestamp && formatTime(msg.timestamp)}{" "}
-                  {msg.pending && "⏳"}
+                  {msg.pending && "Sending..."}
                 </span>
               </div>
               {msg.senderId === user.id &&
@@ -665,11 +780,11 @@ const ChatRoom = ({ roomId, roomName }) => {
                         }}
                         title="Thu hồi tin nhắn (còn 2 phút)"
                       >
-                        🔙 Thu hồi
+                        Recall
                       </button>
                     ) : (
                       <span style={{ color: "#999", fontSize: "12px" }}>
-                        ⏰ Hết hạn thu hồi
+                        Recall expired
                       </span>
                     )}
                   </div>
@@ -693,9 +808,23 @@ const ChatRoom = ({ roomId, roomName }) => {
           placeholder="Nhập tin nhắn... (Shift+Enter để xuống dòng)"
           rows="3"
         />
-        <button onClick={handleSendMessage} className="btn-send">
-          📤 Gửi
-        </button>
+        <div className="input-actions">
+          <button
+            className="btn-emoji"
+            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            title="Add emoji"
+          >
+            Add emoji
+          </button>
+          <button onClick={handleSendMessage} className="btn-send">
+            Send
+          </button>
+        </div>
+        {showEmojiPicker && (
+          <div ref={emojiPickerRef} className="emoji-picker-container">
+            <EmojiPicker onEmojiClick={handleEmojiClick} theme="auto" />
+          </div>
+        )}
       </div>
     </div>
   );

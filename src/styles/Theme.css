@@ -7,23 +7,23 @@
 
   /* Background Colors */
   --bg-primary: #ffffff;
-  --bg-secondary: #f8f9fa;
-  --bg-tertiary: #e9ecef;
+  --bg-secondary: #f0f0f0;
+  --bg-tertiary: #e5e5e5;
   --bg-card: #ffffff;
-  --bg-hover: #f1f3f4;
-  --bg-active: #e8f0fe;
+  --bg-hover: #e8e8e8;
+  --bg-active: #d4e4f7;
 
   /* Text Colors */
-  --text-primary: #1a1a1a;
-  --text-secondary: #4a5568;
-  --text-tertiary: #718096;
+  --text-primary: #000000;
+  --text-secondary: #333333;
+  --text-tertiary: #666666;
   --text-inverse: #ffffff;
-  --text-muted: #a0aec0;
+  --text-muted: #999999;
 
   /* Border Colors */
-  --border-primary: #e2e8f0;
-  --border-secondary: #edf2f7;
-  --border-hover: #cbd5e0;
+  --border-primary: #cccccc;
+  --border-secondary: #dddddd;
+  --border-hover: #999999;
 
   /* Shadow */
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);

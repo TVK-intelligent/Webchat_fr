@@ -1,7 +1,7 @@
 /* Friends Styles */
 .friends-container {
   flex: 1;
-  padding: 24px;
+  padding: 16px;
   overflow-y: auto;
   background: var(--bg-primary);
   transition: background-color 0.3s ease;
@@ -11,9 +11,9 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
   background: var(--bg-card);
-  padding: 20px 24px;
+  padding: 20px 34px;
   border-radius: 16px;
   box-shadow: var(--shadow-md);
   border: 1px solid var(--border-secondary);
@@ -27,7 +27,7 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 4px;
+  /* height: px; */
   background: var(--primary-gradient);
 }
 
@@ -164,10 +164,10 @@
   align-items: center;
   gap: 16px;
   padding: 20px;
-  background: var(--bg-secondary);
+  background: transparent;
   border-radius: 12px;
   transition: all 0.3s ease;
-  border: 1px solid var(--border-secondary);
+  border: none;
   position: relative;
   overflow: hidden;
 }

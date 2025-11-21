@@ -5,7 +5,7 @@
   color: var(--text-primary);
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   box-shadow: var(--shadow-lg);
   transition: all 0.3s ease;
   border-right: 1px solid var(--border-primary);
@@ -18,7 +18,7 @@
   top: 0;
   left: 0;
   right: 0;
-  height: 4px;
+  /* height: 4px; */
   background: var(--primary-gradient);
   z-index: 1;
 }

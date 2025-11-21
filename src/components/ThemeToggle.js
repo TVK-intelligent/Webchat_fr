@@ -9,7 +9,7 @@ const ThemeToggle = ({ showLabel = true, size = "normal" }) => {
     <div className={`theme-toggle-container ${size}`}>
       {showLabel && (
         <span className="theme-label">
-          {theme === "light" ? "🌙 Dark" : "☀️ Light"}
+          {theme === "light" ? "Dark" : "Light"}
         </span>
       )}
       <button
@@ -20,9 +20,7 @@ const ThemeToggle = ({ showLabel = true, size = "normal" }) => {
       >
         <div className="theme-toggle-track">
           <div className="theme-toggle-thumb">
-            <span className="theme-icon">
-              {theme === "light" ? "🌙" : "☀️"}
-            </span>
+            <span className="theme-icon">{theme === "light" ? "" : ""}</span>
           </div>
         </div>
       </button>

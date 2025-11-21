@@ -2,16 +2,16 @@
 
 Ứng dụng chat thời gian thực với React, WebSocket, và Spring Boot Backend
 
-## 🚀 Tính Năng
+## Tính Năng
 
-✅ **Đăng nhập/Đăng ký** - Tạo tài khoản và đăng nhập  
-✅ **Chat Phòng** - Tham gia và chat trong các phòng  
-✅ **Tạo Phòng** - Tạo phòng chat công khai hoặc riêng tư  
-✅ **Tin nhắn Thời gian thực** - WebSocket STOMP  
-✅ **Thấy khi người khác gõ** - Typing indicators  
-✅ **Danh sách Bạn bè** - Quản lý bạn bè  
-✅ **Thông báo** - Nhận thông báo mới  
-✅ **Responsive Design** - Hoạt động trên desktop và mobile
+**Đăng nhập/Đăng ký** - Tạo tài khoản và đăng nhập  
+ **Chat Phòng** - Tham gia và chat trong các phòng  
+ **Tạo Phòng** - Tạo phòng chat công khai hoặc riêng tư  
+ **Tin nhắn Thời gian thực** - WebSocket STOMP  
+ **Thấy khi người khác gõ** - Typing indicators  
+ **Danh sách Bạn bè** - Quản lý bạn bè  
+ **Thông báo** - Nhận thông báo mới  
+ **Responsive Design** - Hoạt động trên desktop và mobile
 
 ## 📋 Yêu Cầu
 
@@ -19,7 +19,7 @@
 - npm >= 6.0
 - Backend Spring Boot chạy trên `http://localhost:8080`
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Cài đặt dependencies
 
@@ -70,13 +70,13 @@ frontend/
 └── package.json
 ```
 
-## 🎯 Các Tab Chính
+## Các Tab Chính
 
-| Tab          | Chức Năng               |
-| ------------ | ----------------------- |
-| 💬 Chat      | Danh sách phòng và chat |
-| 👥 Bạn bè    | Quản lý bạn bè          |
-| 🔔 Thông báo | Xem thông báo           |
+| Tab       | Chức Năng               |
+| --------- | ----------------------- |
+| 💬 Chat   | Danh sách phòng và chat |
+| 👥 Bạn bè | Quản lý bạn bè          |
+| Thông báo | Xem thông báo           |
 
 ## 📱 Build cho Production
 
@@ -90,4 +90,4 @@ npm run build
 - Đảm bảo backend Spring Boot đang chạy
 - JWT tokens tự động được lưu và gửi kèm requests
 
-Happy Chatting! 💬🚀
+Happy Chatting! 💬

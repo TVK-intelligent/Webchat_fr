@@ -1,48 +1,33 @@
 import React, { useState, useEffect } from "react";
 import { roomInviteService } from "../services/api";
-import { desktopNotificationService } from "../services/desktopNotification";
 import "../styles/RoomInviteNotifications.css";
 
 const RoomInviteNotifications = () => {
   const [pendingInvites, setPendingInvites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expandedIds, setExpandedIds] = useState(new Set());
-  const previousInvitesRef = React.useRef([]);
 
   useEffect(() => {
     loadPendingInvites();
-    // Refresh pending invites every 5 seconds
-    const interval = setInterval(loadPendingInvites, 5000);
+
+    //  Polling để cập nhật lời mời mới theo thời gian thực
+    // Vì WebSocket có thể fail, polling là backup để đảm bảo lời mời được cập nhật
+    const interval = setInterval(() => {
+      console.log("Polling pending invites...");
+      loadPendingInvites();
+    }, 3000); // Kiểm tra mỗi 3 giây
+
     return () => clearInterval(interval);
   }, []);
 
   const loadPendingInvites = async () => {
     try {
       const response = await roomInviteService.getPendingInvites();
-      console.log("🎯 Pending invites data:", response.data); // Debug log
+      console.log("Pending invites data:", response.data); // Debug log
 
-      // ✅ Phát Desktop Notification cho lời mời mới
+      //  Chỉ update UI - không phát âm thanh ở đây
+      // Background service sẽ xử lý notifications
       const newInvites = response.data || [];
-      const previousInvites = previousInvitesRef.current;
-
-      newInvites.forEach((invite) => {
-        const isNewInvite = !previousInvites.find(
-          (prev) => prev.id === invite.id
-        );
-        if (
-          isNewInvite &&
-          desktopNotificationService.isDesktopNotificationEnabled()
-        ) {
-          const inviterName =
-            invite.inviter?.displayName ||
-            invite.inviter?.username ||
-            "Người dùng";
-          const roomName = invite.roomName || "Phòng";
-          desktopNotificationService.notifyRoomInvite(inviterName, roomName);
-        }
-      });
-
-      previousInvitesRef.current = newInvites;
       setPendingInvites(newInvites);
     } catch (err) {
       console.error("Failed to load pending invites:", err);
@@ -57,10 +42,10 @@ const RoomInviteNotifications = () => {
       setPendingInvites(
         pendingInvites.filter((invite) => invite.id !== inviteId)
       );
-      showNotification("✅ Đã chấp nhận lời mời!", "success");
+      showNotification("Invite accepted!", "success");
     } catch (err) {
       console.error("Failed to accept invite:", err);
-      showNotification("❌ Lỗi khi chấp nhận lời mời", "error");
+      showNotification("Error accepting invite", "error");
     }
   };
 
@@ -73,7 +58,7 @@ const RoomInviteNotifications = () => {
       showNotification("👋 Đã từ chối lời mời", "info");
     } catch (err) {
       console.error("Failed to decline invite:", err);
-      showNotification("❌ Lỗi khi từ chối lời mời", "error");
+      showNotification("Error declining invite", "error");
     }
   };
 
@@ -104,7 +89,7 @@ const RoomInviteNotifications = () => {
     <div className="room-invite-notifications">
       <div className="notifications-header">
         <div className="header-content">
-          <h3>🎯 Lời mời vào phòng</h3>
+          <h3>Room invitations</h3>
           <span className="badge">{pendingInvites.length}</span>
         </div>
         <p className="header-subtitle">
@@ -141,10 +126,7 @@ const RoomInviteNotifications = () => {
                       src={`http://localhost:8081${inviterAvatar}`}
                       alt={inviterName}
                       onError={(e) => {
-                        console.warn(
-                          "❌ Avatar failed to load:",
-                          inviterAvatar
-                        );
+                        console.warn("Avatar failed to load:", inviterAvatar);
                         e.target.style.display = "none";
                         if (e.target.nextSibling) {
                           e.target.nextSibling.style.display = "flex";
@@ -169,13 +151,13 @@ const RoomInviteNotifications = () => {
                       <span className="invite-verb">mời bạn vào phòng</span>
                     </div>
                     <div className="invite-inviter-detail">
-                      👤{" "}
+                      Person{" "}
                       <span className="inviter-handle">@{inviterUsername}</span>
                     </div>
                     <div className="invite-room">
-                      <span className="room-icon">🏠</span>
+                      <span className="room-icon">Room</span>
                       <span className="room-name">
-                        {invite.roomName || "Phòng"}
+                        {invite.roomName || "Room"}
                       </span>
                     </div>
                   </div>
@@ -202,13 +184,13 @@ const RoomInviteNotifications = () => {
                     className="action-btn accept-btn"
                     onClick={() => handleAcceptInvite(invite.id)}
                   >
-                    ✅ Chấp nhận
+                    Accept
                   </button>
                   <button
                     className="action-btn decline-btn"
                     onClick={() => handleDeclineInvite(invite.id)}
                   >
-                    ❌ Từ chối
+                    Decline
                   </button>
                 </div>
               )}

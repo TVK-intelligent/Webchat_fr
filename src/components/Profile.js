@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
 import { userService } from "../services/api";
+import { getFullAvatarUrl } from "../utils/avatarUtils";
 import "../styles/Profile.css";
 
 const Profile = () => {
@@ -17,9 +18,7 @@ const Profile = () => {
       setDisplayName(user.displayName || "");
       // Set avatar preview with full URL and cache-busting parameter
       if (user.avatarUrl) {
-        const fullAvatarUrl = user.avatarUrl.startsWith("http")
-          ? user.avatarUrl
-          : `http://localhost:8081${user.avatarUrl}`;
+        const fullAvatarUrl = getFullAvatarUrl(user.avatarUrl);
         setAvatarPreview(`${fullAvatarUrl}?t=${Date.now()}`);
       } else {
         setAvatarPreview("");
@@ -32,13 +31,13 @@ const Profile = () => {
     if (file) {
       // Validate file size (max 5MB)
       if (file.size > 5 * 1024 * 1024) {
-        setError("❌ Kích thước file không được vượt quá 5MB");
+        setError("File size cannot exceed 5MB");
         return;
       }
 
       // Validate file type
       if (!file.type.startsWith("image/")) {
-        setError("❌ Vui lòng chọn file hình ảnh");
+        setError("Please select an image file");
         return;
       }
 
@@ -61,7 +60,7 @@ const Profile = () => {
     setError("");
 
     try {
-      console.log("🔄 Starting profile update process...");
+      console.log("Starting profile update process...");
 
       // Create FormData for the request
       const formData = new FormData();
@@ -69,38 +68,36 @@ const Profile = () => {
       // Add displayName if it has changed
       if (displayName.trim() !== (user.displayName || "").trim()) {
         formData.append("displayName", displayName.trim());
-        console.log("📝 Adding displayName to form:", displayName.trim());
+        console.log("Adding displayName to form:", displayName.trim());
       }
 
       // Add avatar file if selected
       if (avatarFile) {
         formData.append("avatar", avatarFile);
-        console.log("� Adding avatar file:", avatarFile.name);
+        console.log("Adding avatar file:", avatarFile.name);
       }
 
       // Check if there's anything to update
       if (!formData.has("displayName") && !formData.has("avatar")) {
-        setMessage("ℹ️ Không có thay đổi nào để lưu");
+        setMessage(" Không có thay đổi nào để lưu");
         return;
       }
 
-      console.log("📤 Sending update request...");
+      console.log("Sending update request...");
       const response = await userService.updateUserProfile(user.id, formData);
 
-      console.log("✅ Profile updated successfully:", response.data);
+      console.log("Profile updated successfully:", response.data);
 
       // Clear the avatar file after successful upload
       setAvatarFile(null);
 
       // Update the preview URL
       if (response.data.avatarUrl) {
-        const fullAvatarUrl = response.data.avatarUrl.startsWith("http")
-          ? response.data.avatarUrl
-          : `http://localhost:8081${response.data.avatarUrl}`;
+        const fullAvatarUrl = getFullAvatarUrl(response.data.avatarUrl);
         setAvatarPreview(`${fullAvatarUrl}?t=${Date.now()}`);
       }
 
-      setMessage("✅ Cập nhật hồ sơ thành công!");
+      setMessage("Profile updated successfully!");
 
       // Update auth context
       if (typeof updateUser === "function") {
@@ -110,14 +107,14 @@ const Profile = () => {
           updatedAt: Date.now(),
         };
         updateUser(updatedData);
-        console.log("🔄 Auth context updated with data:", updatedData);
+        console.log("Auth context updated with data:", updatedData);
       }
     } catch (err) {
       const errorMsg =
-        err.response?.data?.message || err.message || "Cập nhật hồ sơ thất bại";
-      setError("❌ " + errorMsg);
-      console.error("❌ Error updating profile:", err);
-      console.error("❌ Error response:", err.response?.data);
+        err.response?.data?.message || err.message || "Profile update failed";
+      setError(errorMsg);
+      console.error("Error updating profile:", err);
+      console.error("Error response:", err.response?.data);
     } finally {
       setLoading(false);
     }
@@ -126,8 +123,8 @@ const Profile = () => {
   return (
     <div className="profile-container">
       <div className="profile-header">
-        <h2>👤 Hồ Sơ Cá Nhân</h2>
-        <p className="header-subtitle">Cập nhật thông tin cá nhân của bạn</p>
+        <h2>Personal Profile</h2>
+        <p className="header-subtitle">Update your personal information</p>
       </div>
 
       {message && <div className="success-message">{message}</div>}
@@ -164,16 +161,14 @@ const Profile = () => {
                     className="avatar-input"
                   />
                   <label htmlFor="avatar-input" className="upload-btn-sm">
-                    📷 Chọn Ảnh
+                    Choose Image
                   </label>
                   <p className="upload-hint-sm">
                     Tối đa 5MB
                     <br />
                     JPG, PNG, GIF
                   </p>
-                  {avatarFile && (
-                    <p className="file-name">📄 {avatarFile.name}</p>
-                  )}
+                  {avatarFile && <p className="file-name">{avatarFile.name}</p>}
                 </div>
               </div>
             </div>
@@ -199,10 +194,10 @@ const Profile = () => {
             {/* Action Buttons */}
             <div className="profile-actions">
               <button type="submit" disabled={loading} className="btn-save">
-                {loading ? "⏳ Đang lưu..." : "💾 Lưu Thay Đổi"}
+                {loading ? "Saving..." : "Save Changes"}
               </button>
               <button type="button" onClick={logout} className="btn-logout">
-                🚪 Đăng Xuất
+                Logout
               </button>
             </div>
           </div>

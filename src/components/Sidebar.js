@@ -16,7 +16,7 @@ const Sidebar = ({ user, onTabChange, activeTab }) => {
   return (
     <div className="sidebar">
       <div className="sidebar-header">
-        <h1>💬 Web Chat</h1>
+        <h1>Web Chat</h1>
       </div>
 
       <nav className="sidebar-nav">
@@ -24,13 +24,19 @@ const Sidebar = ({ user, onTabChange, activeTab }) => {
           className={`nav-item ${activeTab === "chat" ? "active" : ""}`}
           onClick={() => onTabChange("chat")}
         >
-          💬 Chat
+          Chat
+        </button>
+        <button
+          className={`nav-item ${activeTab === "rooms" ? "active" : ""}`}
+          onClick={() => onTabChange("rooms")}
+        >
+          Chat Rooms
         </button>
         <button
           className={`nav-item ${activeTab === "friends" ? "active" : ""}`}
           onClick={() => onTabChange("friends")}
         >
-          👥 Bạn bè
+          Friends
         </button>
         <button
           className={`nav-item ${
@@ -38,7 +44,7 @@ const Sidebar = ({ user, onTabChange, activeTab }) => {
           }`}
           onClick={() => onTabChange("notifications")}
         >
-          🔔 Thông báo
+          Notifications
         </button>
       </nav>
 
@@ -78,7 +84,7 @@ const Sidebar = ({ user, onTabChange, activeTab }) => {
                   setShowMenu(false);
                 }}
               >
-                👤 Hồ sơ
+                Profile
               </button>
               <button
                 onClick={() => {
@@ -86,10 +92,10 @@ const Sidebar = ({ user, onTabChange, activeTab }) => {
                   setShowMenu(false);
                 }}
               >
-                ⚙️ Cài đặt
+                Settings
               </button>
               <button onClick={logout} className="logout-btn">
-                🚪 Đăng xuất
+                Logout
               </button>
             </div>
           )}

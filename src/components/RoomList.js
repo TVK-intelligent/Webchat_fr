@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect, useRef } from "react";
 import { chatRoomService, messageService } from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import { subscribeToReadReceipt } from "../services/websocket";
+import { subscribeToRoomEvents } from "../services/roomWebSocket";
 import "../styles/RoomList.css";
 
 const RoomList = ({ onSelectRoom, selectedRoomId, onCreateRoom }) => {
@@ -14,15 +15,96 @@ const RoomList = ({ onSelectRoom, selectedRoomId, onCreateRoom }) => {
   const [isPrivate, setIsPrivate] = useState(false);
   const [hoveredRoomId, setHoveredRoomId] = useState(null);
   const [unreadCounts, setUnreadCounts] = useState({});
-  const readReceiptSubscriptionsRef = React.useRef({});
+  const readReceiptSubscriptionsRef = useRef({});
 
-  // Load rooms
+  // Load rooms từ API
+  const loadRooms = async () => {
+    try {
+      setLoading(true);
+      const response = await chatRoomService.getAllRooms();
+      console.log("Rooms loaded:", response.data);
+      console.log("First room owner check:", response.data[0]?.owner);
+      console.log("Current user:", user);
+
+      //  Filter rooms: ẩn các phòng riêng tư mà người dùng không phải là thành viên
+      const filteredRooms = response.data.filter((room) => {
+        // Hiển thị phòng công khai
+        if (!room.isPrivate) {
+          return true;
+        }
+
+        // Với phòng riêng tư, chỉ hiển thị nếu người dùng là thành viên
+        const isMember = room.members?.some((m) => m.id === user?.id);
+        return isMember;
+      });
+
+      console.log(
+        `Filtered ${response.data.length} rooms to ${filteredRooms.length} visible rooms`
+      );
+
+      // Log detail for each room
+      filteredRooms.forEach((room, index) => {
+        console.log(`Room ${index + 1}:`, {
+          id: room.id,
+          name: room.name,
+          isPrivate: room.isPrivate,
+          ownerId: room.owner?.id,
+          ownerName: room.owner?.username,
+          memberCount: room.members?.length || 0,
+          currentUserId: user?.id,
+          isOwner: user?.id === room.owner?.id,
+          isMember: room.members?.some((m) => m.id === user?.id),
+        });
+      });
+
+      setRooms(filteredRooms);
+    } catch (error) {
+      console.error("Error loading rooms:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadRooms();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ Fetch unread counts periodically
+  //  Subscribe to room events
   useEffect(() => {
+    const roomEventsSubscription = subscribeToRoomEvents(
+      (newRoom) => {
+        console.log("New room from WebSocket:", newRoom);
+        setRooms((prevRooms) => {
+          const exists = prevRooms.some((r) => r.id === newRoom.id);
+          if (exists) return prevRooms;
+          return [...prevRooms, newRoom];
+        });
+      },
+      (deletedRoomId) => {
+        setRooms((prevRooms) =>
+          prevRooms.filter((r) => r.id !== deletedRoomId)
+        );
+      },
+      (updatedRoom) => {
+        setRooms((prevRooms) =>
+          prevRooms.map((r) => (r.id === updatedRoom.id ? updatedRoom : r))
+        );
+      }
+    );
+
+    // Cleanup khi component unmount
+    return () => {
+      if (roomEventsSubscription?.unsubscribe) {
+        roomEventsSubscription.unsubscribe();
+      }
+    };
+  }, []);
+
+  //  Fetch unread counts periodically
+  useEffect(() => {
+    if (rooms.length === 0) return;
+
     const fetchUnreadCounts = async () => {
       for (const room of rooms) {
         try {
@@ -37,29 +119,19 @@ const RoomList = ({ onSelectRoom, selectedRoomId, onCreateRoom }) => {
       }
     };
 
-    if (rooms.length > 0) {
-      fetchUnreadCounts();
-      // Refresh every 5 seconds
-      const interval = setInterval(fetchUnreadCounts, 5000);
-      return () => clearInterval(interval);
-    }
+    fetchUnreadCounts();
+    // Increased polling interval from 5s to 30s to reduce backend spam
+    const interval = setInterval(fetchUnreadCounts, 30000);
+    return () => clearInterval(interval);
   }, [rooms]);
 
-  // ✅ Subscribe to read receipt events (real-time unread count update)
+  //  Subscribe to read receipt events
   useEffect(() => {
-    // Don't subscribe if no rooms
     if (rooms.length === 0) return;
 
-    // Subscribe to read receipt for each room
     const subscriptions = {};
     for (const room of rooms) {
       const subscription = subscribeToReadReceipt(room.id, (readReceipt) => {
-        console.log(
-          `📬 Read receipt received for room ${room.id}:`,
-          readReceipt
-        );
-
-        // Update unread count: trừ số messages vừa được mark
         if (readReceipt.receiptType === "ROOM") {
           setUnreadCounts((prev) => ({
             ...prev,
@@ -68,41 +140,21 @@ const RoomList = ({ onSelectRoom, selectedRoomId, onCreateRoom }) => {
               (prev[room.id] || 0) - readReceipt.markedCount
             ),
           }));
-          console.log(
-            `✅ Updated unread count for room ${room.id}: -${readReceipt.markedCount} messages`
-          );
         }
       });
-      if (subscription) {
-        subscriptions[room.id] = subscription;
-      }
+      if (subscription) subscriptions[room.id] = subscription;
     }
 
     readReceiptSubscriptionsRef.current = subscriptions;
 
-    // Cleanup: unsubscribe from all
     return () => {
       Object.values(subscriptions).forEach((sub) => {
-        if (sub && sub.unsubscribe) {
-          sub.unsubscribe();
-        }
+        if (sub?.unsubscribe) sub.unsubscribe();
       });
     };
   }, [rooms]);
 
-  const loadRooms = async () => {
-    try {
-      setLoading(true);
-      const response = await chatRoomService.getAllRooms();
-      console.log("📋 Rooms loaded:", response.data);
-      setRooms(response.data);
-    } catch (error) {
-      console.error("❌ Lỗi tải phòng:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  //  Tạo phòng
   const handleCreateRoom = async () => {
     if (!newRoomName.trim()) {
       alert("Vui lòng nhập tên phòng!");
@@ -115,56 +167,60 @@ const RoomList = ({ onSelectRoom, selectedRoomId, onCreateRoom }) => {
         description: newRoomDescription,
         isPrivate: isPrivate,
       };
-      console.log("📤 Creating room with data:", roomData);
+      console.log("Creating room with data:", roomData);
 
       const response = await chatRoomService.createRoom(roomData);
-      console.log("✅ Room created:", response.data);
+      console.log("Room created from REST API:", response.data);
 
-      setRooms([...rooms, response.data]);
+      // Remove setRooms(), let WebSocket broadcast sync
+      console.log("Waiting for WebSocket broadcast to sync room list...");
+
+      // Reset form
       setNewRoomName("");
       setNewRoomDescription("");
       setIsPrivate(false);
       setShowCreateModal(false);
 
-      if (onCreateRoom) {
-        onCreateRoom(response.data);
-      }
+      if (onCreateRoom) onCreateRoom(response.data);
     } catch (error) {
-      console.error("❌ Lỗi tạo phòng:", error);
-      alert("Không thể tạo phòng!");
+      console.error("Error creating room:", error);
+      alert("Cannot create room!");
     }
   };
 
   const handleDeleteRoom = async (roomId, roomName) => {
-    const confirmed = window.confirm(
-      `Bạn có chắc chắn muốn xóa phòng "${roomName}"? Hành động này không thể hoàn tác.`
-    );
-
-    if (!confirmed) return;
+    if (!window.confirm(`Bạn có chắc chắn muốn xóa phòng "${roomName}"?`))
+      return;
 
     try {
       await chatRoomService.deleteRoom(roomId);
-      setRooms(rooms.filter((room) => room.id !== roomId));
-      alert("✅ Phòng đã được xóa thành công!");
+      setRooms((prev) => prev.filter((r) => r.id !== roomId));
+      alert("Room deleted successfully!");
     } catch (error) {
-      console.error("❌ Lỗi xóa phòng:", error);
-      if (error.response?.status === 403) {
-        alert("❌ Bạn không có quyền xóa phòng này! Chỉ chủ phòng có thể xóa.");
-      } else {
-        alert(
-          "❌ Không thể xóa phòng: " + (error.response?.data || error.message)
-        );
-      }
+      console.error("Error deleting room:", error);
+      alert("Cannot delete room: " + (error.response?.data || error.message));
     }
   };
 
   return (
     <div className="room-list">
       <div className="room-list-header">
-        <h3>💬 Phòng Chat</h3>
+        <h3>Chat Rooms</h3>
         <button
           className="btn-new-room"
-          onClick={() => setShowCreateModal(true)}
+          onClick={() => {
+            console.log("DEBUG - Current state:", {
+              roomsCount: rooms.length,
+              user: user,
+              rooms: rooms.map((r) => ({
+                id: r.id,
+                name: r.name,
+                ownerId: r.owner?.id,
+                isOwner: user?.id === r.owner?.id,
+              })),
+            });
+            setShowCreateModal(true);
+          }}
         >
           + Tạo phòng
         </button>
@@ -174,8 +230,8 @@ const RoomList = ({ onSelectRoom, selectedRoomId, onCreateRoom }) => {
         <div className="loading">Đang tải...</div>
       ) : rooms.length === 0 ? (
         <div className="no-rooms">
-          <p>📭 Chưa có phòng nào</p>
-          <p className="hint">Tạo phòng đầu tiên của bạn</p>
+          <p>No rooms</p>
+          <p className="hint">Create your first room</p>
         </div>
       ) : (
         <div className="rooms-container">
@@ -186,47 +242,71 @@ const RoomList = ({ onSelectRoom, selectedRoomId, onCreateRoom }) => {
                 selectedRoomId === room.id ? "active" : ""
               }`}
               onClick={() => onSelectRoom(room)}
-              onMouseEnter={() => setHoveredRoomId(room.id)}
+              onMouseEnter={() => {
+                console.log("Hover room:", {
+                  roomId: room.id,
+                  roomName: room.name,
+                  ownerId: room.owner?.id,
+                  userId: user?.id,
+                  isOwner: user?.id === room.owner?.id,
+                  owner: room.owner,
+                });
+                setHoveredRoomId(room.id);
+              }}
               onMouseLeave={() => setHoveredRoomId(null)}
             >
-              <div className="room-info">
-                <h4>{room.name}</h4>
+              <div className="room-info" style={{ background: "white" }}>
+                <h4
+                  style={{
+                    background: "white",
+                    color: "#000000",
+                    WebkitTextFillColor: "unset",
+                    WebkitBackgroundClip: "unset",
+                    backgroundClip: "unset",
+                  }}
+                >
+                  {room.name}
+                </h4>
                 <p className="room-desc">{room.description}</p>
               </div>
               <div className="room-actions">
                 {unreadCounts[room.id] > 0 && (
                   <span className="unread-badge">{unreadCounts[room.id]}</span>
                 )}
-                <span
-                  className={`room-type ${
-                    room.isPrivate ? "private" : "public"
-                  }`}
-                >
-                  {room.isPrivate ? "🔒 Riêng tư" : "🌐 Công khai"}
-                </span>
-                {user &&
-                  room &&
-                  room.owner &&
-                  room.owner.id === user.id &&
-                  hoveredRoomId === room.id && (
+                <div className="room-actions-other">
+                  <span
+                    className={`room-type ${
+                      room.isPrivate ? "private" : "public"
+                    }`}
+                  >
+                    {room.isPrivate ? "Private" : "Public"}
+                  </span>
+                  {user?.id === room.owner?.id && hoveredRoomId === room.id && (
                     <button
                       className="btn-delete-room"
                       onClick={(e) => {
                         e.stopPropagation();
+                        console.log("Delete button clicked:", {
+                          roomId: room.id,
+                          roomName: room.name,
+                          userId: user?.id,
+                          ownerId: room.owner?.id,
+                          isOwner: user?.id === room.owner?.id,
+                        });
                         handleDeleteRoom(room.id, room.name);
                       }}
-                      title="Xóa phòng"
+                      title="Delete room"
                     >
-                      🗑️ Xóa
+                      Delete
                     </button>
                   )}
+                </div>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Create Room Modal */}
       {showCreateModal && (
         <div className="modal-overlay">
           <div className="modal">
@@ -259,7 +339,7 @@ const RoomList = ({ onSelectRoom, selectedRoomId, onCreateRoom }) => {
                 checked={isPrivate}
                 onChange={(e) => setIsPrivate(e.target.checked)}
               />
-              <label htmlFor="isPrivate">🔒 Phòng riêng tư</label>
+              <label htmlFor="isPrivate">Private Room</label>
             </div>
 
             <div className="modal-actions">

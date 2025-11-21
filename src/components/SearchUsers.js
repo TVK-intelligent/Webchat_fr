@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { friendService } from "../services/api";
+import { getFullAvatarUrl } from "../utils/avatarUtils";
 import "../styles/SearchUsers.css";
 
 const SearchUsers = ({ onClose }) => {
@@ -35,10 +36,10 @@ const SearchUsers = ({ onClose }) => {
         );
         setPendingRequests(pendingIds);
 
-        console.log("👥 Current friends:", friendIds);
-        console.log("📥 Pending requests from:", pendingIds);
+        console.log("Current friends:", friendIds);
+        console.log("Pending requests from:", pendingIds);
       } catch (err) {
-        console.error("❌ Error loading friends and requests:", err);
+        console.error("Error loading friends and requests:", err);
       }
     };
 
@@ -76,37 +77,37 @@ const SearchUsers = ({ onClose }) => {
   const handleSendRequest = async (userId) => {
     // Check if already friends
     if (friends.has(userId)) {
-      alert("⚠️ Bạn đã là bạn bè rồi!");
+      alert("Already friends!");
       return;
     }
 
     // Check if already pending request
     if (pendingRequests.has(userId)) {
-      alert("⚠️ Đang chờ xác nhận từ người này!");
+      alert("Waiting for confirmation from this person!");
       return;
     }
 
     // Check if already sent request
     if (sentRequests[userId]) {
-      alert("⚠️ Bạn đã gửi lời mời rồi!");
+      alert("You already sent an invite!");
       return;
     }
 
     try {
       await friendService.sendFriendRequest(userId);
       setSentRequests({ ...sentRequests, [userId]: true });
-      alert("✅ Lời mời kết bạn đã gửi!");
+      alert("Friend request sent!");
     } catch (err) {
       const errorMsg = err.response?.data?.message || err.message;
-      console.error("❌ Error sending friend request:", err);
-      alert("❌ Lỗi: " + errorMsg);
+      console.error("Error sending friend request:", err);
+      alert("Error: " + errorMsg);
     }
   };
 
   return (
     <div className="search-users-container">
       <div className="search-users-header">
-        <h2>🔍 Tìm kiếm người dùng</h2>
+        <h2>Search users</h2>
         <button className="close-btn" onClick={onClose}>
           ✕
         </button>
@@ -137,7 +138,7 @@ const SearchUsers = ({ onClose }) => {
               <img
                 src={
                   user.avatarUrl
-                    ? `http://localhost:8081${user.avatarUrl}`
+                    ? getFullAvatarUrl(user.avatarUrl)
                     : "https://via.placeholder.com/40"
                 }
                 alt={user.displayName}
@@ -173,12 +174,12 @@ const SearchUsers = ({ onClose }) => {
               }
             >
               {friends.has(user.id)
-                ? "👥 Bạn bè"
+                ? "Friends"
                 : pendingRequests.has(user.id)
-                ? "⏳ Chờ"
+                ? "Pending"
                 : sentRequests[user.id]
-                ? "✓ Đã gửi"
-                : "+ Kết bạn"}
+                ? "Sent"
+                : "+ Add Friend"}
             </button>
           </div>
         ))}

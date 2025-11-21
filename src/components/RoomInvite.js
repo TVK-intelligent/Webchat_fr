@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { roomInviteService } from "../services/api";
+import { getFullAvatarUrl } from "../utils/avatarUtils";
 import "../styles/RoomInvite.css";
 
 const RoomInvite = ({ roomId, onClose, onInviteSent }) => {
@@ -18,7 +19,7 @@ const RoomInvite = ({ roomId, onClose, onInviteSent }) => {
       const response = await roomInviteService.getAvailableFriendsForRoom(
         roomId
       );
-      console.log("👥 Available friends data:", response.data); // Debug log
+      console.log("Available friends data:", response.data); // Debug log
       setAvailableFriends(response.data || []);
     } catch (err) {
       console.error("Failed to load available friends:", err);
@@ -31,7 +32,7 @@ const RoomInvite = ({ roomId, onClose, onInviteSent }) => {
   const loadInvitedUsers = useCallback(async () => {
     try {
       const response = await roomInviteService.getInvitedUsersForRoom(roomId);
-      console.log("⏳ Invited users data:", response.data); // Debug log
+      console.log("Invited users data:", response.data); // Debug log
       setInvitedUsers(response.data || []);
     } catch (err) {
       console.error("Failed to load invited users:", err);
@@ -42,6 +43,16 @@ const RoomInvite = ({ roomId, onClose, onInviteSent }) => {
     if (roomId) {
       loadAvailableFriends();
       loadInvitedUsers();
+
+      //  Polling để cập nhật danh sách bạn bè và người được mời
+      // Đảm bảo khi bạn bè chấp nhận lời mời, danh sách được cập nhật ngay lập tức
+      const interval = setInterval(() => {
+        console.log("Polling available friends and invited users...");
+        loadAvailableFriends();
+        loadInvitedUsers();
+      }, 3000); // Kiểm tra mỗi 3 giây
+
+      return () => clearInterval(interval);
     }
   }, [roomId, loadAvailableFriends, loadInvitedUsers]);
 
@@ -127,7 +138,7 @@ const RoomInvite = ({ roomId, onClose, onInviteSent }) => {
       <div className="room-invite-content">
         <div className="room-invite-header">
           <div className="header-left">
-            <h2>🎯 Mời bạn vào phòng</h2>
+            <h2>Invite friends to room</h2>
             <p className="header-subtitle">
               Chọn bạn bè để gửi lời mời tham gia
             </p>
@@ -139,24 +150,24 @@ const RoomInvite = ({ roomId, onClose, onInviteSent }) => {
           )}
         </div>
 
-        {error && <div className="alert alert-error">⚠️ {error}</div>}
-        {success && <div className="alert alert-success">✅ {success}</div>}
+        {error && <div className="alert alert-error">{error}</div>}
+        {success && <div className="alert alert-success">{success}</div>}
 
         {/* Preview section */}
         {selectedFriends.size > 0 && (
           <div className="invite-preview">
             <div className="preview-title">
-              ℹ️ Bạn bè sẽ nhận được lời mời như sau:
+              Friends will receive the invite like this:
             </div>
             <div className="preview-message">
               <div className="preview-avatar">
-                <span>👤</span>
+                <span>Person</span>
               </div>
               <div className="preview-content">
                 <p className="preview-inviter">
                   <strong>Bạn</strong> mời họ vào phòng
                 </p>
-                <p className="preview-room">🏠 Phòng chat</p>
+                <p className="preview-room">Chat room</p>
               </div>
             </div>
           </div>
@@ -167,7 +178,7 @@ const RoomInvite = ({ roomId, onClose, onInviteSent }) => {
           <div className="section available-friends-section">
             <div className="section-header">
               <div className="section-title">
-                <span className="section-icon">👥</span>
+                <span className="section-icon">Friends</span>
                 <div>
                   <h3>Bạn bè có thể mời</h3>
                   <p className="section-count">
@@ -194,8 +205,8 @@ const RoomInvite = ({ roomId, onClose, onInviteSent }) => {
 
             {availableFriends.length === 0 ? (
               <div className="empty-state">
-                <p className="empty-icon">😌</p>
-                <p className="empty-text">Không có bạn bè nào để mời</p>
+                <p className="empty-icon">-</p>
+                <p className="empty-text">No friends to invite</p>
                 <small className="empty-hint">
                   Tất cả bạn bè của bạn đều đã là thành viên hoặc đang chờ lời
                   mời
@@ -214,11 +225,11 @@ const RoomInvite = ({ roomId, onClose, onInviteSent }) => {
                     <div className="friend-avatar">
                       {friend.avatarUrl ? (
                         <img
-                          src={`http://localhost:8081${friend.avatarUrl}`}
+                          src={getFullAvatarUrl(friend.avatarUrl)}
                           alt={friend.displayName}
                           onError={(e) => {
                             console.warn(
-                              "❌ Avatar failed to load:",
+                              "Avatar failed to load:",
                               friend.avatarUrl
                             );
                             e.target.style.display = "none";
@@ -258,7 +269,7 @@ const RoomInvite = ({ roomId, onClose, onInviteSent }) => {
             <div className="section invited-section">
               <div className="section-header">
                 <div className="section-title">
-                  <span className="section-icon">⏳</span>
+                  <span className="section-icon">Pending</span>
                   <div>
                     <h3>Đang chờ xác nhận</h3>
                     <p className="section-count">
@@ -273,11 +284,11 @@ const RoomInvite = ({ roomId, onClose, onInviteSent }) => {
                     <div className="invited-avatar">
                       {user.avatarUrl ? (
                         <img
-                          src={`http://localhost:8081${user.avatarUrl}`}
+                          src={getFullAvatarUrl(user.avatarUrl)}
                           alt={user.displayName}
                           onError={(e) => {
                             console.warn(
-                              "❌ Invited avatar failed to load:",
+                              "Invited avatar failed to load:",
                               user.avatarUrl
                             );
                             e.target.style.display = "none";
@@ -298,7 +309,7 @@ const RoomInvite = ({ roomId, onClose, onInviteSent }) => {
                       <div className="invited-name">{user.displayName}</div>
                       <div className="invited-username">@{user.username}</div>
                     </div>
-                    <div className="invited-status">⏱️ Chờ</div>
+                    <div className="invited-status">Pending</div>
                   </div>
                 ))}
               </div>
@@ -322,8 +333,8 @@ const RoomInvite = ({ roomId, onClose, onInviteSent }) => {
                 disabled={selectedFriends.size === 0 || inviting}
               >
                 {inviting
-                  ? "⏳ Đang gửi..."
-                  : `✉️ Gửi ${selectedFriends.size} lời mời`}
+                  ? "Sending..."
+                  : `Send ${selectedFriends.size} invites`}
               </button>
             )}
             {onClose && (

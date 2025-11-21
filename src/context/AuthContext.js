@@ -19,7 +19,7 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   // Update user in context and localStorage (used after profile update)
-  // ✅ IMPORTANT: This must call setUser to trigger re-render in consuming components
+  //  IMPORTANT: This must call setUser to trigger re-render in consuming components
   const updateUser = (userData) => {
     if (!userData) return;
     try {
@@ -29,8 +29,8 @@ export const AuthProvider = ({ children }) => {
         updatedAt: Date.now(), // Force re-render timestamp
       };
       localStorage.setItem("user", JSON.stringify(updatedUserData));
-      setUser(updatedUserData); // ✅ Always update state to trigger re-render
-      console.log("🔄 User updated in AuthContext:", updatedUserData);
+      setUser(updatedUserData); //  Always update state to trigger re-render
+      console.log(" User updated in AuthContext:", updatedUserData);
     } catch (e) {
       console.warn("Failed to write user to localStorage", e);
     }
@@ -44,18 +44,18 @@ export const AuthProvider = ({ children }) => {
         try {
           setToken(storedToken);
           const response = await userService.getCurrentUser();
-          updateUser(response.data); // ✅ Use updateUser to sync with UI
+          updateUser(response.data); //  Use updateUser to sync with UI
 
           connectWebSocket(
             storedToken,
             () => {
-              console.log("✅ WebSocket connected from AuthContext");
+              console.log(" WebSocket connected from AuthContext");
 
-              // 🟢 Broadcast user status to ONLINE after WebSocket connection established
+              //  Broadcast user status to ONLINE after WebSocket connection established
               setTimeout(() => {
                 const user = response.data;
                 broadcastUserStatus(user.id, true);
-                console.log("🟢 User status set to ONLINE on page refresh");
+                console.log(" User status set to ONLINE on page refresh");
               }, 500); // Delay slightly to ensure WebSocket is fully ready
             },
             (error) => {
@@ -74,6 +74,36 @@ export const AuthProvider = ({ children }) => {
     };
 
     initAuth();
+
+    // 🔴 Handle beforeunload to set OFFLINE before closing
+    const handleBeforeUnload = () => {
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          //  Gửi OFFLINE status synchronously (blocking) để ensure được xử lý
+          // navigator.sendBeacon không đảm bảo gửi JSON đúng format
+          // Thay vào đó, khóa connection qua navigator.sendBeacon với form-encoded data
+          const beaconData = new FormData();
+          beaconData.append("userId", userData.id);
+          beaconData.append("isOnline", "false");
+
+          // Cách 1: Dùng sendBeacon (best-effort, không đảm bảo)
+          navigator.sendBeacon(
+            "http://localhost:8081/api/users/set-offline",
+            JSON.stringify({ userId: userData.id, isOnline: false })
+          );
+          console.log("🔴 OFFLINE status sent via sendBeacon on page close");
+        } catch (e) {
+          console.warn("Failed to send OFFLINE status on unload:", e);
+        }
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
   }, []);
 
   const login = async (username, password) => {
@@ -91,12 +121,12 @@ export const AuthProvider = ({ children }) => {
       connectWebSocket(
         newToken,
         () => {
-          console.log("✅ WebSocket connected from login");
+          console.log(" WebSocket connected from login");
 
-          // 🟢 Broadcast user status to ONLINE after WebSocket connection established
+          //  Broadcast user status to ONLINE after WebSocket connection established
           setTimeout(() => {
             broadcastUserStatus(userData.id, true);
-            console.log("🟢 User status set to ONLINE");
+            console.log(" User status set to ONLINE");
           }, 500); // Delay slightly to ensure WebSocket is fully ready
         },
         (error) => {
@@ -125,10 +155,15 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
-    // 🔴 Broadcast user status to OFFLINE before logout
+    // 🔴 Set user status to OFFLINE before logout
     if (user?.id) {
-      broadcastUserStatus(user.id, false);
-      console.log("🔴 User status set to OFFLINE");
+      try {
+        //  Gửi OFFLINE status via WebSocket (more reliable than REST API)
+        broadcastUserStatus(user.id, false);
+        console.log("🔴 User status OFFLINE sent via WebSocket during logout");
+      } catch (e) {
+        console.warn("Failed to send OFFLINE status via WebSocket:", e);
+      }
     }
 
     authService.logout();

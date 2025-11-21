@@ -11,14 +11,11 @@
 }
 
 .room-list::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 2px;
-  background: var(--primary-gradient);
-  opacity: 0.3;
+  content: "" !important;
+  display: none !important;
+  visibility: hidden !important;
+  width: 0 !important;
+  background: transparent !important;
 }
 
 .room-list-header {
@@ -114,54 +111,90 @@
 .room-item {
   padding: 16px 20px;
   margin-bottom: 12px;
-  background: var(--bg-card);
+  background: transparent !important;
   border-radius: 12px;
   cursor: pointer;
   transition: all 0.3s ease;
-  border: 1px solid var(--border-secondary);
+  border: none !important;
   display: flex;
   justify-content: space-between;
   align-items: center;
   position: relative;
-  overflow: hidden;
+  overflow: visible !important;
+  background-image: none !important;
+  background-clip: initial !important;
+  -webkit-background-clip: initial !important;
+  -webkit-text-fill-color: initial !important;
+}
+
+.room-item *,
+.room-item *::before,
+.room-item *::after {
+  background: none !important;
+  background-image: none !important;
+  background-clip: initial !important;
+  -webkit-background-clip: initial !important;
+  -webkit-text-fill-color: initial !important;
 }
 
 .room-item::before {
-  content: "";
+  content: "" !important;
   position: absolute;
   left: 0;
   top: 0;
   bottom: 0;
-  width: 0;
-  background: var(--primary-gradient);
+  width: 0 !important;
+  background: transparent !important;
   transition: width 0.3s ease;
+  display: none !important;
+  visibility: hidden !important;
 }
 
 .room-item:hover {
-  background: var(--bg-hover);
+  background: transparent;
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
   border-color: var(--border-hover);
 }
 
+.room-item:hover .room-info {
+  background: transparent !important;
+}
+
 .room-item:hover::before {
-  width: 4px;
+  width: 0;
 }
 
 .room-item.active {
-  background: var(--bg-active);
+  background: transparent;
   border-color: var(--primary-color);
   box-shadow: var(--shadow-md);
   transform: translateY(-1px);
 }
 
+.room-item.active .room-info {
+  background: transparent !important;
+}
+
 .room-item.active::before {
-  width: 4px;
+  width: 0;
 }
 
 .room-info {
   flex: 1;
   min-width: 0;
+  background: transparent !important;
+  background-image: none !important;
+}
+
+.room-item.active .room-info {
+  background: transparent !important;
+  background-image: none !important;
+}
+
+.room-item:hover .room-info {
+  background: transparent !important;
+  background-image: none !important;
 }
 
 .room-actions {
@@ -169,12 +202,33 @@
   align-items: center;
   gap: 10px;
   margin-left: 12px;
-  opacity: 0;
-  transition: opacity 0.3s ease;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  flex-shrink: 0;
 }
 
-.room-item:hover .room-actions {
+.room-actions-other {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: opacity 0.3s ease;
+  white-space: nowrap;
+}
+
+.room-item:hover .room-actions-other {
   opacity: 1;
+}
+
+/* Đảm bảo nút delete luôn hiển thị khi có */
+.btn-delete-room {
+  opacity: 1 !important;
+  display: flex !important;
+  visibility: visible !important;
+}
+
+/* Khi có unread count, luôn hiển thị */
+.unread-badge {
+  opacity: 1 !important;
 }
 
 .unread-badge {
@@ -209,12 +263,38 @@
 
 .room-info h4 {
   margin: 0 0 6px 0;
-  color: var(--text-primary);
+  color: #000000 !important;
   font-size: 16px;
   font-weight: 600;
   display: flex;
   align-items: center;
   gap: 8px;
+  background: white !important;
+  background-image: none !important;
+  background-clip: unset !important;
+  -webkit-background-clip: unset !important;
+  -webkit-text-fill-color: #000000 !important;
+}
+
+.room-item .room-info h4 {
+  background: transparent !important;
+  background-image: none !important;
+  background-clip: unset !important;
+  -webkit-background-clip: unset !important;
+  -webkit-text-fill-color: #000000 !important;
+  color: #000000 !important;
+}
+
+.room-item.active .room-info h4 {
+  background: transparent !important;
+  background-image: none !important;
+  -webkit-text-fill-color: #000000 !important;
+  color: #000000 !important;
+}
+
+.room-item.active .room-info h4 {
+  background: transparent !important;
+  background-image: none !important;
 }
 
 .room-desc {
@@ -310,9 +390,7 @@
   }
 }
 
-.room-item {
-  animation: roomSlideIn 0.3s ease-out;
-}
+/* .room-item animation removed to prevent gradient issues */
 
 /* Online Status Indicator */
 .room-info h4::after {
@@ -323,6 +401,12 @@
   border-radius: 50%;
   margin-left: auto;
   opacity: 0.8;
+}
+
+.room-info::before,
+.room-info::after {
+  display: none !important;
+  visibility: hidden !important;
 }
 
 /* Search and Filter Section */
@@ -405,4 +489,21 @@
     padding: 6px 10px;
     font-size: 11px;
   }
+}
+
+/* CRITICAL: Remove gradient box from room items */
+.rooms-container .room-item .room-info h4 {
+  background: none !important;
+  background-clip: initial !important;
+  -webkit-background-clip: initial !important;
+  background-image: none !important;
+  background-color: transparent !important;
+  -webkit-text-fill-color: #000000 !important;
+  color: #000000 !important;
+}
+
+.rooms-container .room-item .room-info {
+  background: none !important;
+  background-image: none !important;
+  background-color: transparent !important;
 }

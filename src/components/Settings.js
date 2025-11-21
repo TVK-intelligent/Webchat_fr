@@ -1,39 +1,45 @@
 import React, { useState } from "react";
 import { useAuth } from "../context/AuthContext";
-import { notificationSoundService } from "../services/notificationSound";
-import { desktopNotificationService } from "../services/desktopNotification";
+import { notificationAudioService } from "../services/notificationAudioService";
 import { broadcastUserStatus } from "../services/websocket";
-import { NOTIFICATION_SOUNDS } from "../constants/notificationSounds";
 import ThemeToggle from "./ThemeToggle";
 import "../styles/Settings.css";
 
 const Settings = () => {
   const { user, logout } = useAuth();
-  const [soundEnabled, setSoundEnabled] = useState(
-    notificationSoundService.isNotificationSoundEnabled()
+
+  // Audio settings
+  const [audioEnabled, setAudioEnabled] = useState(
+    notificationAudioService.isAudioEnabled()
   );
-  const [soundUrl, setSoundUrl] = useState(
-    notificationSoundService.getSoundUrl()
+  const [audioVolume, setAudioVolume] = useState(
+    notificationAudioService.getVolume()
   );
-  const [volume, setVolume] = useState(notificationSoundService.getVolume());
+  const [friendRequestSound, setFriendRequestSound] = useState(
+    notificationAudioService.getSoundForType("friendRequest")
+  );
+  const [roomInviteSound, setRoomInviteSound] = useState(
+    notificationAudioService.getSoundForType("roomInvite")
+  );
+  const [messageSound, setMessageSound] = useState(
+    notificationAudioService.getSoundForType("message")
+  );
+
   const [showOnlineStatus, setShowOnlineStatus] = useState(
     localStorage.getItem("showOnlineStatus") !== "false"
-  );
-  const [desktopNotificationEnabled, setDesktopNotificationEnabled] = useState(
-    desktopNotificationService.isDesktopNotificationEnabled()
   );
 
   return (
     <div className="settings-container">
       <div className="settings-header">
-        <h2>⚙️ Cài Đặt</h2>
+        <h2>Settings</h2>
         <p className="settings-subtitle">Tùy chỉnh ứng dụng theo ý muốn</p>
       </div>
 
       <div className="settings-content">
         {/* Theme Settings */}
         <div className="settings-section">
-          <h3>🎨 Giao Diện</h3>
+          <h3>Appearance</h3>
           <div className="setting-item">
             <div className="setting-info">
               <label>Chế độ hiển thị</label>
@@ -47,7 +53,7 @@ const Settings = () => {
 
         {/* Account Settings */}
         <div className="settings-section">
-          <h3>👤 Tài Khoản</h3>
+          <h3>Account</h3>
           <div className="setting-item">
             <div className="setting-info">
               <label>Tên hiển thị</label>
@@ -64,59 +70,40 @@ const Settings = () => {
           </div>
         </div>
 
-        {/* Notification Settings */}
+        {/* Advanced Audio Settings - Separate Sounds for Each Notification Type */}
         <div className="settings-section">
-          <h3>🔔 Thông Báo</h3>
+          <h3>Individual Sound Notifications</h3>
+          <p className="section-description">
+            Cài đặt chuông khác nhau cho từng loại thông báo
+          </p>
+
           <div className="setting-item">
             <div className="setting-info">
-              <label>Âm thanh thông báo</label>
+              <label>Bật chuông riêng</label>
               <span className="setting-description">
-                Phát âm thanh khi gửi tin
+                Phát chuông khác nhau cho kết bạn, lời mời phòng và tin nhắn
               </span>
             </div>
             <label className="toggle-switch">
               <input
                 type="checkbox"
-                checked={soundEnabled}
+                checked={audioEnabled}
                 onChange={(e) => {
-                  setSoundEnabled(e.target.checked);
-                  notificationSoundService.setEnabled(e.target.checked);
+                  setAudioEnabled(e.target.checked);
+                  notificationAudioService.setEnabled(e.target.checked);
                 }}
               />
               <span className="toggle-slider"></span>
             </label>
           </div>
 
-          {soundEnabled && (
+          {audioEnabled && (
             <>
               <div className="setting-item">
                 <div className="setting-info">
-                  <label>Âm thanh</label>
+                  <label>Âm lượng chuông</label>
                   <span className="setting-description">
-                    Chọn loại âm thanh thông báo
-                  </span>
-                </div>
-                <select
-                  className="sound-select"
-                  value={soundUrl}
-                  onChange={(e) => {
-                    setSoundUrl(e.target.value);
-                    notificationSoundService.setSoundUrl(e.target.value);
-                  }}
-                >
-                  <option value={NOTIFICATION_SOUNDS.DEFAULT}>Mặc định</option>
-                  <option value={NOTIFICATION_SOUNDS.BELL}>Chuông</option>
-                  <option value={NOTIFICATION_SOUNDS.PING}>Ping</option>
-                  <option value={NOTIFICATION_SOUNDS.CHIME}>Chime</option>
-                  <option value={NOTIFICATION_SOUNDS.POP}>Pop</option>
-                </select>
-              </div>
-
-              <div className="setting-item">
-                <div className="setting-info">
-                  <label>Âm lượng</label>
-                  <span className="setting-description">
-                    {(volume * 100).toFixed(0)}%
+                    {(audioVolume * 100).toFixed(0)}%
                   </span>
                 </div>
                 <div className="volume-control">
@@ -125,71 +112,167 @@ const Settings = () => {
                     min="0"
                     max="1"
                     step="0.1"
-                    value={volume}
+                    value={audioVolume}
                     onChange={(e) => {
                       const newVolume = parseFloat(e.target.value);
-                      setVolume(newVolume);
-                      notificationSoundService.setVolume(newVolume);
+                      setAudioVolume(newVolume);
+                      notificationAudioService.setVolume(newVolume);
                     }}
                     className="volume-slider"
                   />
+                </div>
+              </div>
+
+              {/* Friend Request Sound */}
+              <div className="setting-item">
+                <div className="setting-info">
+                  <label>Friend Request Sound</label>
+                  <span className="setting-description">
+                    Âm thanh khi có lời mời kết bạn
+                  </span>
+                </div>
+                <div className="sound-control">
+                  <select
+                    className="sound-select"
+                    value={friendRequestSound}
+                    onChange={(e) => {
+                      setFriendRequestSound(e.target.value);
+                      notificationAudioService.setSoundForType(
+                        "friendRequest",
+                        e.target.value
+                      );
+                    }}
+                  >
+                    {Object.entries(
+                      notificationAudioService.getAvailableSounds(
+                        "friendRequest"
+                      )
+                    ).map(([key, url]) => (
+                      <option key={key} value={url}>
+                        {notificationAudioService.getSoundName(key)}
+                      </option>
+                    ))}
+                  </select>
                   <button
                     className="btn-test-sound"
-                    onClick={() => notificationSoundService.testSound()}
-                    title="Test âm thanh"
-                  >
-                    🔊 Test
-                  </button>
+                    onClick={() =>
+                      notificationAudioService.testSound("friendRequest")
+                    }
+                    title="Test chuông kết bạn"
+                  ></button>
                 </div>
+              </div>
+
+              {/* Room Invite Sound */}
+              <div className="setting-item">
+                <div className="setting-info">
+                  <label>Room Invite Sound</label>
+                  <span className="setting-description">
+                    Âm thanh khi có lời mời vào phòng
+                  </span>
+                </div>
+                <div className="sound-control">
+                  <select
+                    className="sound-select"
+                    value={roomInviteSound}
+                    onChange={(e) => {
+                      setRoomInviteSound(e.target.value);
+                      notificationAudioService.setSoundForType(
+                        "roomInvite",
+                        e.target.value
+                      );
+                    }}
+                  >
+                    {Object.entries(
+                      notificationAudioService.getAvailableSounds("roomInvite")
+                    ).map(([key, url]) => (
+                      <option key={key} value={url}>
+                        {notificationAudioService.getSoundName(key)}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    className="btn-test-sound"
+                    onClick={() =>
+                      notificationAudioService.testSound("roomInvite")
+                    }
+                    title="Test chuông lời mời phòng"
+                  ></button>
+                </div>
+              </div>
+
+              {/* Message Sound */}
+              <div className="setting-item">
+                <div className="setting-info">
+                  <label>Message Sound</label>
+                  <span className="setting-description">
+                    Âm thanh khi có tin nhắn mới
+                  </span>
+                </div>
+                <div className="sound-control">
+                  <select
+                    className="sound-select"
+                    value={messageSound}
+                    onChange={(e) => {
+                      setMessageSound(e.target.value);
+                      notificationAudioService.setSoundForType(
+                        "message",
+                        e.target.value
+                      );
+                    }}
+                  >
+                    {Object.entries(
+                      notificationAudioService.getAvailableSounds("message")
+                    ).map(([key, url]) => (
+                      <option key={key} value={url}>
+                        {notificationAudioService.getSoundName(key)}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    className="btn-test-sound"
+                    onClick={() =>
+                      notificationAudioService.testSound("message")
+                    }
+                    title="Test chuông tin nhắn"
+                  ></button>
+                </div>
+              </div>
+
+              <div className="setting-item">
+                <div className="setting-info">
+                  <label>Reset Chuông</label>
+                  <span className="setting-description">
+                    Khôi phục cài đặt chuông mặc định
+                  </span>
+                </div>
+                <button
+                  className="btn-reset-audio"
+                  onClick={() => {
+                    notificationAudioService.resetToDefaults();
+                    setAudioEnabled(notificationAudioService.isAudioEnabled());
+                    setAudioVolume(notificationAudioService.getVolume());
+                    setFriendRequestSound(
+                      notificationAudioService.getSoundForType("friendRequest")
+                    );
+                    setRoomInviteSound(
+                      notificationAudioService.getSoundForType("roomInvite")
+                    );
+                    setMessageSound(
+                      notificationAudioService.getSoundForType("message")
+                    );
+                  }}
+                >
+                  Reset
+                </button>
               </div>
             </>
           )}
         </div>
 
-        {/* Desktop Notifications Settings */}
-        {desktopNotificationService.constructor.isSupported() && (
-          <div className="settings-section">
-            <h3>🖥️ Desktop Notifications</h3>
-            <div className="setting-item">
-              <div className="setting-info">
-                <label>Desktop Notifications</label>
-                <span className="setting-description">
-                  Nhận thông báo từ hệ thống khi có tin nhắn hoặc thông báo mới
-                </span>
-              </div>
-              <label className="toggle-switch">
-                <input
-                  type="checkbox"
-                  checked={desktopNotificationEnabled}
-                  onChange={async (e) => {
-                    if (e.target.checked) {
-                      const granted =
-                        await desktopNotificationService.requestPermission();
-                      if (granted) {
-                        setDesktopNotificationEnabled(true);
-                        desktopNotificationService.setEnabled(true);
-                        desktopNotificationService.notifyGeneral(
-                          "✅ Desktop Notifications",
-                          "Bạn đã bật Desktop Notifications"
-                        );
-                      } else {
-                        setDesktopNotificationEnabled(false);
-                      }
-                    } else {
-                      setDesktopNotificationEnabled(false);
-                      desktopNotificationService.setEnabled(false);
-                    }
-                  }}
-                />
-                <span className="toggle-slider"></span>
-              </label>
-            </div>
-          </div>
-        )}
-
         {/* Privacy Settings */}
         <div className="settings-section">
-          <h3>🔒 Quyền Riêng Tư</h3>
+          <h3>Privacy</h3>
           <div className="setting-item">
             <div className="setting-info">
               <label>Hiển thị trạng thái online</label>
@@ -213,8 +296,8 @@ const Settings = () => {
                   // When toggled OFF (false), broadcast false (OFFLINE)
                   broadcastUserStatus(user.id, isVisible);
                   console.log(
-                    `🟢 Online status visibility: ${
-                      isVisible ? "Hiển thị (Online)" : "Ẩn (Offline)"
+                    `Online status visibility: ${
+                      isVisible ? "Visible (Online)" : "Hidden (Offline)"
                     }`
                   );
                 }}
@@ -226,7 +309,7 @@ const Settings = () => {
 
         {/* Danger Zone */}
         <div className="settings-section danger-section">
-          <h3>⚠️ Khu Vực Nguy Hiểm</h3>
+          <h3>Danger Zone</h3>
           <div className="setting-item">
             <div className="setting-info">
               <label>Đăng xuất</label>
@@ -235,7 +318,7 @@ const Settings = () => {
               </span>
             </div>
             <button className="btn-danger" onClick={logout}>
-              🚪 Đăng Xuất
+              Logout
             </button>
           </div>
         </div>

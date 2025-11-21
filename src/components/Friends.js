@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { friendService } from "../services/api";
-import { desktopNotificationService } from "../services/desktopNotification";
+import webSocketService from "../services/websocket";
 import SearchUsers from "./SearchUsers";
+import { getFullAvatarUrl } from "../utils/avatarUtils";
 import "../styles/Friends.css";
 
 const Friends = () => {
@@ -10,14 +11,71 @@ const Friends = () => {
   const [loading, setLoading] = useState(true);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [activeTab, setActiveTab] = useState("friends"); // "friends", "pending"
-  const previousRequestsRef = React.useRef([]);
 
   useEffect(() => {
     loadData();
 
-    // Reload friends every 10 seconds to get latest status
-    const interval = setInterval(loadData, 10000);
-    return () => clearInterval(interval);
+    // Subscribe to user status changes (real-time online/offline)
+    console.log("Friends component: Subscribing to global user status");
+    const unsubscribe = webSocketService.subscribeToUserStatus(
+      null, // null = global status listener
+      (statusUpdate) => {
+        console.log("User status update received:", statusUpdate);
+
+        // Update friends list with new status
+        setFriends((prevFriends) => {
+          console.log("Current friends before update:", prevFriends);
+          const updated = prevFriends.map((friendship) => {
+            // Xác định bạn (vì mối quan hệ có thể đi từ 2 hướng)
+            const isFriendTheFirstUser =
+              friendship.friend.id ===
+              JSON.parse(localStorage.getItem("user"))?.id;
+            const friend = isFriendTheFirstUser
+              ? friendship.user
+              : friendship.friend;
+
+            if (friend.id === statusUpdate.userId) {
+              console.log(
+                `Updated friend ${statusUpdate.userId} status to ${statusUpdate.status}`
+              );
+              // Create updated friend object
+              const updatedFriend = {
+                ...friend,
+                status: statusUpdate.status,
+                showOnlineStatus: statusUpdate.isOnline,
+              };
+
+              // Return updated friendship
+              return isFriendTheFirstUser
+                ? { ...friendship, user: updatedFriend }
+                : { ...friendship, friend: updatedFriend };
+            }
+            return friendship;
+          });
+          console.log("Friends after update:", updated);
+          return updated;
+        });
+      }
+    );
+
+    console.log(
+      "Friends useEffect cleanup registered, unsubscribe:",
+      unsubscribe
+    );
+
+    return () => {
+      console.log(
+        "Friends component unmounting, unsubscribing from user status"
+      );
+      if (unsubscribe?.unsubscribe) {
+        unsubscribe.unsubscribe();
+      }
+    };
+
+    // ⚠️ DISABLED: Background service xử lý notifications
+    // Component chỉ load 1 lần khi mount để hiển thị UI
+    // const interval = setInterval(loadData, 10000);
+    // return () => clearInterval(interval);
   }, []);
 
   const loadData = async () => {
@@ -27,34 +85,15 @@ const Friends = () => {
         friendService.getPendingRequests(),
       ]);
 
-      console.log("👥 Friends data:", friendsRes.data); // Debug
-      console.log("📥 Pending requests data:", requestsRes.data); // Debug
+      console.log("Friends data:", friendsRes.data); // Debug
+      console.log("Pending requests data:", requestsRes.data); // Debug
 
-      // ✅ Phát Desktop Notification cho lời mời kết bạn mới
-      const newRequests = requestsRes.data || [];
-      const previousRequests = previousRequestsRef.current;
-
-      newRequests.forEach((request) => {
-        const isNewRequest = !previousRequests.find(
-          (prev) => prev.id === request.id
-        );
-        if (
-          isNewRequest &&
-          desktopNotificationService.isDesktopNotificationEnabled()
-        ) {
-          const senderName =
-            request.fromUser?.displayName ||
-            request.fromUser?.username ||
-            "Người dùng";
-          desktopNotificationService.notifyFriendRequest(senderName);
-        }
-      });
-
-      previousRequestsRef.current = newRequests;
+      // Update UI only - don't play audio here
+      // Background service will handle notifications
       setFriends(friendsRes.data || []);
-      setPendingRequests(newRequests);
+      setPendingRequests(requestsRes.data || []);
     } catch (error) {
-      console.error("❌ Lỗi tải dữ liệu bạn bè:", error);
+      console.error("Error loading friends:", error);
     } finally {
       setLoading(false);
     }
@@ -64,11 +103,11 @@ const Friends = () => {
     if (window.confirm("Bạn có chắc chắn muốn xóa bạn này?")) {
       try {
         await friendService.removeFriend(friendshipId);
-        alert("✅ Xóa bạn thành công!");
+        alert("Friend removed successfully!");
         loadData();
       } catch (error) {
-        console.error("❌ Lỗi xóa bạn:", error);
-        alert("❌ Không thể xóa bạn!");
+        console.error("Error deleting friend:", error);
+        alert("Cannot remove friend!");
       }
     }
   };
@@ -76,38 +115,38 @@ const Friends = () => {
   const handleAcceptRequest = async (friendshipId) => {
     try {
       await friendService.acceptFriendRequest(friendshipId);
-      alert("✅ Chấp nhận lời mời thành công!");
+      alert("Friend request accepted!");
       loadData();
     } catch (error) {
-      console.error("❌ Lỗi chấp nhận lời mời:", error);
-      alert("❌ Không thể chấp nhận lời mời!");
+      console.error("Error accepting invite:", error);
+      alert("Cannot accept invite!");
     }
   };
 
   const handleDeclineRequest = async (friendshipId) => {
     try {
       await friendService.declineFriendRequest(friendshipId);
-      alert("✅ Từ chối lời mời thành công!");
+      alert("Friend request declined!");
       loadData();
     } catch (error) {
-      console.error("❌ Lỗi từ chối lời mời:", error);
-      alert("❌ Không thể từ chối lời mời!");
+      console.error("Error declining invite:", error);
+      alert("Cannot decline invite!");
     }
   };
 
   if (loading) {
-    return <div className="friends-container">⏳ Đang tải...</div>;
+    return <div className="friends-container">Loading...</div>;
   }
 
   return (
     <div className="friends-container">
       <div className="friends-header">
-        <h2>👥 Danh sách Bạn bè</h2>
+        <h2>Friend List</h2>
         <button
           className="btn-search-friends"
           onClick={() => setShowSearchModal(true)}
         >
-          🔍 Tìm kiếm & Kết bạn
+          Search & Add Friend
         </button>
       </div>
 
@@ -117,7 +156,7 @@ const Friends = () => {
           className={`tab ${activeTab === "friends" ? "active" : ""}`}
           onClick={() => setActiveTab("friends")}
         >
-          💬 Bạn bè ({friends.length})
+          Friends ({friends.length})
         </button>
         <button
           className={`tab ${activeTab === "pending" ? "active" : ""}`}
@@ -159,7 +198,7 @@ const Friends = () => {
                     <div className="friend-avatar">
                       {friend.avatarUrl ? (
                         <img
-                          src={`http://localhost:8081${friend.avatarUrl}`}
+                          src={getFullAvatarUrl(friend.avatarUrl)}
                           alt={friend.displayName}
                           onError={(e) => {
                             console.warn(
@@ -201,9 +240,9 @@ const Friends = () => {
                       <span className="friend-status">
                         {friend.status === "ONLINE" &&
                         friend.showOnlineStatus !== false ? (
-                          <span className="online-badge">🟢 Online</span>
+                          <span className="online-badge">Online</span>
                         ) : (
-                          <span className="offline-badge">⚫ Offline</span>
+                          <span className="offline-badge">Offline</span>
                         )}
                       </span>
                     </div>
@@ -236,7 +275,7 @@ const Friends = () => {
                   <div className="pending-avatar">
                     {invite.user.avatarUrl ? (
                       <img
-                        src={`http://localhost:8081${invite.user.avatarUrl}`}
+                        src={getFullAvatarUrl(invite.user.avatarUrl)}
                         alt={invite.user.displayName}
                         onError={(e) => {
                           console.warn(
@@ -272,9 +311,7 @@ const Friends = () => {
                       className="btn-accept-pending"
                       onClick={() => handleAcceptRequest(invite.id)}
                       title="Chấp nhận"
-                    >
-                      ✅
-                    </button>
+                    ></button>
                     <button
                       className="btn-decline-pending"
                       onClick={() => handleDeclineRequest(invite.id)}

@@ -13,9 +13,19 @@ const API_BASE_URL = "http://localhost:8081";
 export const getFullAvatarUrl = (avatarUrl, addTimestamp = false) => {
   if (!avatarUrl) return "";
 
-  let fullUrl = avatarUrl.startsWith("http")
-    ? avatarUrl
-    : `${API_BASE_URL}${avatarUrl}`;
+  let fullUrl;
+
+  // If it's already a full URL, use as is
+  if (avatarUrl.startsWith("http")) {
+    fullUrl = avatarUrl;
+  } else if (avatarUrl.includes("/uploads/avatars/")) {
+    // Convert old format /uploads/avatars/uuid.png to new API endpoint
+    const filename = avatarUrl.split("/uploads/avatars/")[1];
+    fullUrl = `${API_BASE_URL}/api/avatars/${filename}`;
+  } else {
+    // Assume it's the old direct path format
+    fullUrl = `${API_BASE_URL}${avatarUrl}`;
+  }
 
   if (addTimestamp) {
     const separator = fullUrl.includes("?") ? "&" : "?";

@@ -22,7 +22,7 @@ const Login = ({ onSwitchToRegister }) => {
   return (
     <div className="auth-container">
       <div className="auth-box">
-        <h1>💬 Web Chat</h1>
+        <h1>Web Chat</h1>
         <h2>Đăng Nhập</h2>
 
         {error && <div className="error-message">{error}</div>}
