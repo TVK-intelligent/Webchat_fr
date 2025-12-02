@@ -332,21 +332,22 @@
 }
 
 .btn-emoji {
-  padding: 10px 12px;
+  padding: 0;
   background: var(--bg-primary);
   color: var(--text-primary);
   border: 1px solid var(--border-secondary);
   border-radius: 8px;
   cursor: pointer;
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
   transition: all 0.2s;
   white-space: nowrap;
-  min-width: 44px;
+  width: 44px;
   height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
 }
 
 .btn-emoji:hover {

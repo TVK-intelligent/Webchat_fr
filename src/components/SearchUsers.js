@@ -155,6 +155,8 @@ const SearchUsers = ({ onClose }) => {
                   ? "already-friend"
                   : sentRequests[user.id]
                   ? "sent"
+                  : pendingRequests.has(user.id)
+                  ? "pending"
                   : ""
               }`}
               onClick={() => handleSendRequest(user.id)}
@@ -173,13 +175,22 @@ const SearchUsers = ({ onClose }) => {
                   : "Gửi lời mời kết bạn"
               }
             >
+              <span className="btn-icon">
+                {friends.has(user.id)
+                  ? "✓"
+                  : pendingRequests.has(user.id)
+                  ? "⏳"
+                  : sentRequests[user.id]
+                  ? "✓"
+                  : "+"}
+              </span>
               {friends.has(user.id)
                 ? "Friends"
                 : pendingRequests.has(user.id)
                 ? "Pending"
                 : sentRequests[user.id]
                 ? "Sent"
-                : "+ Add Friend"}
+                : "Add Friend"}
             </button>
           </div>
         ))}

@@ -153,6 +153,10 @@ export const messageService = {
   // 🆕 Lấy số tin nhắn chưa đọc từ một bạn bè
   getUnreadPrivateMessageCount: (friendId) =>
     apiClient.get(`/messages/private/${friendId}/unread-count`),
+
+  // 🆕 Đánh dấu tất cả tin nhắn riêng tư với một bạn bè là đã đọc
+  markAllPrivateAsRead: (friendId) =>
+    apiClient.put(`/messages/private/${friendId}/mark-all-as-read`, {}),
 };
 
 // ==================== FRIEND SERVICES ====================

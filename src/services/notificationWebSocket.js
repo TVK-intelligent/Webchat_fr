@@ -6,10 +6,19 @@
 import webSocketService from "./websocket";
 
 export const subscribeToNotifications = (userId, onNotificationReceived) => {
-  //  Retry logic cho WebSocket connection
   let subscription = null;
+  let timeoutId = null;
+  let isUnsubscribed = false;
 
   const subscribeWithRetry = (attempt = 1, maxAttempts = 15) => {
+    // If already unsubscribed, stop retrying
+    if (isUnsubscribed) {
+      console.log(
+        `[NOTIFICATION] Skipping retry for userId ${userId} (already unsubscribed)`
+      );
+      return;
+    }
+
     const stompClient = webSocketService.getStompClient();
 
     if (!stompClient || !stompClient.active) {
@@ -17,21 +26,24 @@ export const subscribeToNotifications = (userId, onNotificationReceived) => {
         // Suppress verbose logging for early attempts - this is normal during startup
         if (attempt <= 2) {
           console.log(
-            `WebSocket connection initializing, will subscribe to notifications on ready (attempt ${attempt}/${maxAttempts})`
+            `[NOTIFICATION] WebSocket initializing (attempt ${attempt}/${maxAttempts}), will retry...`
           );
         } else if (attempt === maxAttempts) {
           console.warn(
-            `WebSocket still not connected for notifications after ${maxAttempts} attempts (${
+            `[NOTIFICATION] WebSocket still not connected after ${maxAttempts} attempts (${
               (maxAttempts * 500) / 1000
             }s)`
           );
         }
         // Retry após 500ms
-        setTimeout(() => subscribeWithRetry(attempt + 1, maxAttempts), 500);
+        timeoutId = setTimeout(
+          () => subscribeWithRetry(attempt + 1, maxAttempts),
+          500
+        );
         return;
       } else {
         console.error(
-          "WebSocket connection failed - could not subscribe to notifications"
+          "[NOTIFICATION] WebSocket connection failed - could not subscribe to notifications"
         );
         return;
       }
@@ -47,30 +59,30 @@ export const subscribeToNotifications = (userId, onNotificationReceived) => {
         (message) => {
           try {
             const notification = JSON.parse(message.body);
-            console.log("NOTIFICATION ARRIVED:", notification);
-            console.log("TYPE:", notification.type);
-            console.log("FULL DATA:", JSON.stringify(notification));
+            console.log("[NOTIFICATION] Arrived:", notification);
+            console.log("[NOTIFICATION] Type:", notification.type);
             onNotificationReceived(notification);
           } catch (e) {
-            console.error("Error parsing notification:", e);
+            console.error("[NOTIFICATION] Error parsing:", e);
           }
         }
       );
 
-      console.log("SUCCESSFULLY SUBSCRIBED to notifications!");
+      console.log("[NOTIFICATION] Successfully subscribed!");
     } catch (err) {
       if (attempt <= maxAttempts) {
         console.error(
-          `Error subscribing to notifications (attempt ${attempt}):`,
+          `[NOTIFICATION] Error on attempt ${attempt}:`,
           err.message
         );
-        // Retry - PHẢI RETURN để dừng execution
-        setTimeout(() => subscribeWithRetry(attempt + 1, maxAttempts), 500);
+        // Retry
+        timeoutId = setTimeout(
+          () => subscribeWithRetry(attempt + 1, maxAttempts),
+          500
+        );
         return;
       } else {
-        console.error(
-          "Failed to subscribe to notifications after max attempts"
-        );
+        console.error("[NOTIFICATION] Failed to subscribe after max attempts");
         return;
       }
     }
@@ -80,12 +92,17 @@ export const subscribeToNotifications = (userId, onNotificationReceived) => {
 
   return {
     unsubscribe: () => {
+      isUnsubscribed = true;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
       if (subscription) {
         try {
           subscription.unsubscribe();
-          console.log(`Unsubscribed from notifications`);
+          console.log(`[NOTIFICATION] Unsubscribed from notifications`);
         } catch (e) {
-          console.warn("Error unsubscribing from notifications:", e);
+          console.warn("[NOTIFICATION] Error unsubscribing:", e);
         }
       }
     },
@@ -99,8 +116,19 @@ export const subscribeToRoomInviteNotifications = (
   userId,
   onRoomInviteReceived
 ) => {
-  //  Retry logic cho WebSocket connection
+  let subscription = null;
+  let timeoutId = null;
+  let isUnsubscribed = false;
+
   const subscribeWithRetry = (attempt = 1, maxAttempts = 10) => {
+    // If already unsubscribed, stop retrying
+    if (isUnsubscribed) {
+      console.log(
+        `[ROOM_INVITE] Skipping retry for userId ${userId} (already unsubscribed)`
+      );
+      return;
+    }
+
     const stompClient = webSocketService.getStompClient();
 
     if (!stompClient || !stompClient.active) {
@@ -108,58 +136,72 @@ export const subscribeToRoomInviteNotifications = (
         // Suppress verbose logging for early attempts
         if (attempt <= 2) {
           console.log(
-            `WebSocket initializing for room invites (attempt ${attempt}/${maxAttempts})`
+            `[ROOM_INVITE] WebSocket initializing (attempt ${attempt}/${maxAttempts})`
           );
         } else if (attempt === maxAttempts) {
           console.warn(
-            `WebSocket still not connected for room invites after ${maxAttempts} attempts`
+            `[ROOM_INVITE] WebSocket still not connected after ${maxAttempts} attempts`
           );
         }
         // Retry depois de 500ms
-        setTimeout(() => subscribeWithRetry(attempt + 1, maxAttempts), 500);
-        return null;
+        timeoutId = setTimeout(
+          () => subscribeWithRetry(attempt + 1, maxAttempts),
+          500
+        );
+        return;
       } else {
-        console.error("WebSocket connection failed for room invites");
-        return null;
+        console.error("[ROOM_INVITE] WebSocket connection failed");
+        return;
       }
     }
 
     console.log(
-      `Subscribing to room invites: /user/${userId}/topic/room-invites`
+      `[ROOM_INVITE] Subscribing: /user/${userId}/topic/room-invites`
     );
 
     try {
-      const subscription = stompClient.subscribe(
+      subscription = stompClient.subscribe(
         `/user/${userId}/topic/room-invites`,
         (message) => {
           try {
             const roomInvite = JSON.parse(message.body);
-            console.log("Room invite received:", roomInvite);
+            console.log("[ROOM_INVITE] Received:", roomInvite);
             onRoomInviteReceived(roomInvite);
           } catch (e) {
-            console.error("Error parsing room invite:", e);
+            console.error("[ROOM_INVITE] Error parsing:", e);
           }
         }
       );
 
-      return {
-        unsubscribe: () => {
-          try {
-            subscription.unsubscribe();
-            console.log(`Unsubscribed from room invites`);
-          } catch (e) {
-            console.warn("Error unsubscribing from room invites:", e);
-          }
-        },
-      };
+      console.log("[ROOM_INVITE] Successfully subscribed!");
     } catch (err) {
-      console.error("Error subscribing to room invites:", err.message);
+      console.error("[ROOM_INVITE] Error on attempt", attempt, err.message);
       if (attempt <= maxAttempts) {
-        setTimeout(() => subscribeWithRetry(attempt + 1, maxAttempts), 500);
+        timeoutId = setTimeout(
+          () => subscribeWithRetry(attempt + 1, maxAttempts),
+          500
+        );
       }
-      return null;
     }
   };
 
-  return subscribeWithRetry();
+  subscribeWithRetry();
+
+  return {
+    unsubscribe: () => {
+      isUnsubscribed = true;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      if (subscription) {
+        try {
+          subscription.unsubscribe();
+          console.log(`[ROOM_INVITE] Unsubscribed`);
+        } catch (e) {
+          console.warn("[ROOM_INVITE] Error unsubscribing:", e);
+        }
+      }
+    },
+  };
 };

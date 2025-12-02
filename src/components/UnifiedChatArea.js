@@ -23,7 +23,6 @@ const UnifiedChatArea = ({ conversation, onUnreadCleared, onMessageSent }) => {
           friend={conversation.friend}
           onBack={() => {}}
           onUnreadCleared={onUnreadCleared}
-          onMessageSent={onMessageSent}
         />
       </div>
     );

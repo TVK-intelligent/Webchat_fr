@@ -6,6 +6,7 @@
 
 import { friendService } from "./api";
 import { notificationAudioService } from "./notificationAudioService";
+import { notifyFriendRequest } from "./pushNotificationIntegration";
 
 class FriendRequestNotificationService {
   constructor() {
@@ -72,6 +73,21 @@ class FriendRequestNotificationService {
 
           // 🎵 Phát âm thanh
           notificationAudioService.playFriendRequestSound();
+
+          // 📬 Gửi push notification nếu tab bị ẩn
+          const isTabHidden = document.hidden;
+          console.log(
+            `[FRIEND_REQUEST] Push notification check: isTabHidden=${isTabHidden}`
+          );
+
+          if (isTabHidden) {
+            console.log("📬 Sending push notification for friend request");
+            notifyFriendRequest(request.fromUser?.id, senderName);
+          } else {
+            console.log(
+              `[FRIEND_REQUEST] ❌ Push notification NOT sent: tab is visible`
+            );
+          }
 
           //  Mark đã phát cho request này
           this.notifiedRequestIds.add(request.id);

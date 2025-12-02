@@ -8,9 +8,17 @@ import {
 import { subscribeToRoomEvents } from "../services/roomWebSocket";
 import {
   subscribeToReadReceipt,
-  subscribeToRoomChat,
-  subscribeToPrivateMessages,
+  waitForWebSocketConnection,
 } from "../services/websocket";
+import {
+  subscribeGlobalRoomMessages,
+  subscribeGlobalPrivateMessages,
+} from "../services/globalMessageListener";
+import { notificationAudioService } from "../services/notificationAudioService";
+import {
+  notifyNewRoomMessage,
+  notifyNewPrivateMessage,
+} from "../services/pushNotificationIntegration";
 import { getFullAvatarUrl } from "../utils/avatarUtils";
 import "../styles/ConversationList.css";
 
@@ -19,6 +27,8 @@ const ConversationList = ({
   selectedConversationId,
   onUnreadCleared,
   onMessageSent,
+  messageSentTrigger,
+  unreadCounts: parentUnreadCounts = {},
 }) => {
   const { user } = useAuth();
   const [conversations, setConversations] = useState([]);
@@ -27,12 +37,48 @@ const ConversationList = ({
   const [activeTab, setActiveTab] = useState("all"); // "all", "direct", "group"
   const [unreadCounts, setUnreadCounts] = useState({});
   const readReceiptSubscriptionsRef = useRef({});
-  const messageSentCallbackRef = useRef(onMessageSent);
+  const lastMessageSentTriggerRef = useRef(null);
 
-  // Update ref when callback changes
+  const moveConversationToTop = (type, id) => {
+    console.log(`Moving conversation to top: type=${type}, id=${id}`);
+    setConversations((prev) => {
+      let index = -1;
+
+      if (type === "room") {
+        index = prev.findIndex((c) => c.roomId === id);
+      } else if (type === "direct") {
+        index = prev.findIndex(
+          (c) => c.type === "direct" && c.friend?.id === id
+        );
+      }
+
+      if (index !== -1) {
+        const updatedConversations = [...prev];
+        const [conv] = updatedConversations.splice(index, 1);
+        conv.timestamp = new Date();
+        return [conv, ...updatedConversations];
+      }
+      return prev;
+    });
+  };
+
+  // Listen to messageSentTrigger from parent (Dashboard)
   useEffect(() => {
-    messageSentCallbackRef.current = onMessageSent;
-  }, [onMessageSent]);
+    if (
+      messageSentTrigger &&
+      messageSentTrigger.type &&
+      messageSentTrigger.id &&
+      (!lastMessageSentTriggerRef.current ||
+        lastMessageSentTriggerRef.current.timestamp !==
+          messageSentTrigger.timestamp)
+    ) {
+      console.log(
+        `📢 ConversationList received messageSentTrigger: type=${messageSentTrigger.type}, id=${messageSentTrigger.id}`
+      );
+      lastMessageSentTriggerRef.current = messageSentTrigger;
+      moveConversationToTop(messageSentTrigger.type, messageSentTrigger.id);
+    }
+  }, [messageSentTrigger]);
 
   // Load conversations (friends + rooms)
   useEffect(() => {
@@ -61,10 +107,15 @@ const ConversationList = ({
           };
         });
 
-        //  Filter rooms: ẩn các phòng riêng tư mà người dùng không phải là thành viên
+        //  Filter rooms: ẩn các phòng riêng tư mà người dùng không phải là thành viên, và ẩn các phòng PRIVATE_ tự động tạo
         const allRooms = roomsRes.data || [];
         const rooms = allRooms
           .filter((room) => {
+            // Ẩn phòng PRIVATE_ tự động tạo cho private messages
+            if (room.name && room.name.startsWith("PRIVATE_")) {
+              return false;
+            }
+
             // Hiển thị phòng công khai
             if (!room.isPrivate) {
               return true;
@@ -95,40 +146,8 @@ const ConversationList = ({
           `Loaded conversations: ${friends.length} friends + ${rooms.length} rooms`
         );
 
-        //  Fetch unread counts for all conversations (both rooms and private messages)
-        const newUnreadCounts = {};
-
-        // Fetch for rooms
-        for (const room of rooms) {
-          try {
-            const response = await messageService.getUnreadCount(room.roomId);
-            newUnreadCounts[room.id] = response.data || 0;
-          } catch (error) {
-            console.error(
-              "Error fetching unread count for room",
-              room.roomId,
-              error
-            );
-          }
-        }
-
-        //  Fetch for private messages
-        for (const friend of friends) {
-          try {
-            const response = await messageService.getUnreadPrivateMessageCount(
-              friend.friend.id
-            );
-            newUnreadCounts[friend.id] = response.data || 0;
-          } catch (error) {
-            console.error(
-              "Error fetching unread count for friend",
-              friend.friend.id,
-              error
-            );
-          }
-        }
-
-        setUnreadCounts(newUnreadCounts);
+        // Note: unreadCounts are now managed by Dashboard and passed as prop
+        // So we don't fetch them here anymore. The parent component handles it.
 
         setLoading(false);
       } catch (error) {
@@ -173,94 +192,230 @@ const ConversationList = ({
   }, []);
 
   // Subscribe to room messages to move conversation to top when new messages arrive
+  const roomSubscriptionsRef = useRef({});
+  const roomNamesRef = useRef({}); // Cache room names to ensure we have them for push notifications
+
   useEffect(() => {
-    const rooms = conversations.filter((c) => c.type === "group");
-    const subscriptions = [];
-
-    rooms.forEach((room) => {
-      const sub = subscribeToRoomChat(room.roomId, (newMessage) => {
-        console.log(`New message in room ${room.roomId}, moving to top`);
-        setConversations((prev) => {
-          // Find and move the room conversation to top
-          const index = prev.findIndex((c) => c.roomId === room.roomId);
-          if (index > 0) {
-            const updatedConversations = [...prev];
-            const [roomConv] = updatedConversations.splice(index, 1);
-            // Update timestamp to current time so it appears at top
-            roomConv.timestamp = new Date();
-            return [roomConv, ...updatedConversations];
-          }
-          return prev;
-        });
-
-        // Trigger callback if message was sent by current user
-        if (
-          newMessage.senderId === user?.id &&
-          messageSentCallbackRef.current
-        ) {
-          messageSentCallbackRef.current("room", room.roomId);
-        }
-      });
-      subscriptions.push(sub);
+    // Update room names cache whenever conversations change
+    conversations.forEach((conv) => {
+      if (conv.type === "group" && conv.roomId) {
+        // Extract actual name from displayName (remove emoji prefix - uses Unicode code points)
+        // 🏠 = \uDFE0, 🔒 = \uDD12
+        let actualName = conv.displayName || `Room ${conv.roomId}`;
+        // Remove leading emoji and optional whitespace
+        actualName = actualName.replace(/^[\uDFE0\uDD12]\s*/, "");
+        roomNamesRef.current[conv.roomId] = actualName;
+      }
     });
+    console.log(
+      `[CONVERSATION_LIST] Updated room names cache:`,
+      roomNamesRef.current
+    );
+  }, [conversations]);
 
-    return () => {
-      subscriptions.forEach((sub) => {
+  useEffect(() => {
+    // Add a ref to track if component is mounted
+    let isMounted = true;
+
+    const subscribeToRooms = async () => {
+      const rooms = conversations.filter((c) => c.type === "group");
+      const roomIds = rooms.map((r) => r.roomId);
+      const currentRoomIds = new Set(roomIds);
+      const subscribedRoomIds = new Set(
+        Object.keys(roomSubscriptionsRef.current)
+      );
+
+      // Unsubscribe from all and resubscribe to get fresh callbacks
+      // This ensures callbacks have access to latest conversations state
+      subscribedRoomIds.forEach((roomId) => {
+        const sub = roomSubscriptionsRef.current[roomId];
         if (sub?.unsubscribe) {
+          console.log(
+            `[CONVERSATION] Unsubscribing from room ${roomId} to refresh callback`
+          );
           sub.unsubscribe();
         }
+        delete roomSubscriptionsRef.current[roomId];
+      });
+
+      // Wait for WebSocket connection before subscribing to rooms
+      const isConnected = await waitForWebSocketConnection(10000); // Wait up to 10 seconds
+      if (!isMounted || !isConnected) {
+        if (!isConnected) {
+          console.warn(
+            " WebSocket not connected after timeout - subscriptions will retry automatically"
+          );
+        }
+        return;
+      }
+
+      // Subscribe to all current rooms with fresh callback
+      currentRoomIds.forEach((roomId) => {
+        const sub = subscribeGlobalRoomMessages(roomId, (newMessage) => {
+          console.log(`New message in room ${roomId}, moving to top`);
+          if (!isMounted) return;
+
+          // Get room name from cache (always up to date)
+          const roomName = roomNamesRef.current[roomId] || `Room ${roomId}`;
+          console.log(
+            `[CONVERSATION_LIST] Room name for push notification: "${roomName}"`
+          );
+
+          // Play notification sound if message is from another user
+          if (newMessage.senderId !== user.id) {
+            console.log(
+              `🔊 Playing message notification sound for room ${roomId}`
+            );
+            notificationAudioService.playMessageSound();
+
+            // Send push notification if tab is hidden
+            const isTabHidden = document.hidden;
+            if (isTabHidden) {
+              const displayName =
+                newMessage.senderDisplayName ||
+                newMessage.sender?.displayName ||
+                newMessage.senderUsername ||
+                newMessage.sender?.username ||
+                "Unknown";
+
+              console.log(
+                `[CONVERSATION_LIST] 📬 Sending push notification for room ${roomId} (name: "${roomName}")`
+              );
+              notifyNewRoomMessage(
+                roomId,
+                roomName,
+                displayName,
+                newMessage.content
+              );
+            }
+          }
+
+          setConversations((prev) => {
+            const index = prev.findIndex((c) => c.roomId === roomId);
+            if (index !== -1) {
+              const updatedConversations = [...prev];
+              const [roomConv] = updatedConversations.splice(index, 1);
+              roomConv.timestamp = new Date();
+              return [roomConv, ...updatedConversations];
+            }
+            return prev;
+          });
+        });
+        roomSubscriptionsRef.current[roomId] = sub;
       });
     };
-  }, [conversations, user?.id]);
 
-  // Subscribe to private messages to move conversation to top when new messages arrive
-  useEffect(() => {
-    if (!user?.id) return;
-
-    const sub = subscribeToPrivateMessages(user.id, (newMessage) => {
-      console.log(
-        `New private message from/to ${newMessage.senderId}, moving to top`
-      );
-      setConversations((prev) => {
-        // Find the friend conversation (could be sender or recipient)
-        const friendId =
-          newMessage.senderId === user.id
-            ? newMessage.recipientId
-            : newMessage.senderId;
-        const index = prev.findIndex(
-          (c) => c.type === "direct" && c.friend?.id === friendId
-        );
-
-        if (index > 0) {
-          const updatedConversations = [...prev];
-          const [friendConv] = updatedConversations.splice(index, 1);
-          // Update timestamp to current time so it appears at top
-          friendConv.timestamp = new Date();
-          return [friendConv, ...updatedConversations];
-        }
-        return prev;
-      });
-
-      // Trigger callback if message was sent by current user
-      if (newMessage.senderId === user.id && messageSentCallbackRef.current) {
-        const friendId =
-          newMessage.senderId === user.id
-            ? newMessage.recipientId
-            : newMessage.senderId;
-        messageSentCallbackRef.current("direct", friendId);
-      }
-    });
+    subscribeToRooms();
 
     return () => {
-      if (sub?.unsubscribe) {
-        sub.unsubscribe();
+      isMounted = false;
+    };
+  }, [conversations, user.id]); // Trigger whenever conversations or user changes
+
+  // Private message moving to top is now handled via messageSentTrigger from Dashboard
+  // which gets called from PrivateChatConversation when message is sent/received
+  // This prevents double subscription to /user/{userId}/queue/messages
+
+  // Sync unreadCounts with parent prop (from Dashboard)
+  useEffect(() => {
+    console.log(
+      "[CONVERSATION] Syncing unreadCounts from parent:",
+      parentUnreadCounts
+    );
+    setUnreadCounts(parentUnreadCounts);
+  }, [parentUnreadCounts]);
+
+  //  Subscribe to private messages to update unread counts
+  const privateMessageSubscriptionRef = useRef(null);
+
+  useEffect(() => {
+    // If viewing a private chat, unsubscribe from listener to avoid updating badge
+    if (selectedConversationId?.startsWith("private_")) {
+      console.log(
+        "[CONVERSATION] Viewing private chat, unsubscribing from listener"
+      );
+      if (privateMessageSubscriptionRef.current?.unsubscribe) {
+        privateMessageSubscriptionRef.current.unsubscribe();
+        privateMessageSubscriptionRef.current = null;
+      }
+      return;
+    }
+
+    if (!user?.id) {
+      return;
+    }
+
+    console.log("[CONVERSATION] Subscribing to global private messages");
+
+    privateMessageSubscriptionRef.current = subscribeGlobalPrivateMessages(
+      user.id,
+      (newMessage) => {
+        console.log("[CONVERSATION] New private message received:", newMessage);
+
+        // Only update badge if message is from another user
+        if (newMessage.senderId !== user.id) {
+          const senderId = newMessage.senderId;
+          const conversationId = `private_${senderId}`;
+
+          console.log(
+            `[CONVERSATION] Incrementing badge for ${conversationId}`
+          );
+          setUnreadCounts((prev) => ({
+            ...prev,
+            [conversationId]: (prev[conversationId] || 0) + 1,
+          }));
+
+          // Send push notification if tab is hidden
+          const isTabHidden = document.hidden;
+          const displayName =
+            newMessage.senderDisplayName ||
+            newMessage.sender?.displayName ||
+            newMessage.senderUsername ||
+            newMessage.sender?.username ||
+            "Unknown";
+
+          console.log(
+            `[CONVERSATION_LIST] Private message push notification check:`,
+            `isTabHidden=${isTabHidden}, sender=${displayName}`
+          );
+
+          if (isTabHidden) {
+            console.log(
+              `[CONVERSATION_LIST] 📬 Sending push notification for private message from ${displayName}`
+            );
+            notifyNewPrivateMessage(senderId, displayName, newMessage.content);
+          }
+        }
+      }
+    );
+
+    return () => {
+      console.log(
+        "[CONVERSATION] Cleanup: Unsubscribing from global private messages"
+      );
+      if (privateMessageSubscriptionRef.current?.unsubscribe) {
+        privateMessageSubscriptionRef.current.unsubscribe();
+        privateMessageSubscriptionRef.current = null;
       }
     };
-  }, [user?.id]);
+  }, [user?.id, selectedConversationId]);
 
-  //  Fetch unread counts periodically and subscribe to read receipts
+  // Fetch and refresh unread counts periodically
+  // (This will be called for room unread counts, but private message counts come from parent prop)
   useEffect(() => {
+    // Skip if we already have unread counts from parent
+    if (Object.keys(parentUnreadCounts).length > 0) {
+      console.log(
+        "[CONVERSATION] Using unread counts from parent, skipping fetch"
+      );
+      return;
+    }
+
+    let isMounted = true;
+
     const fetchUnreadCounts = async () => {
+      if (!isMounted) return;
+
       const newUnreadCounts = {};
 
       // Fetch for rooms
@@ -295,37 +450,56 @@ const ConversationList = ({
         }
       }
 
-      setUnreadCounts(newUnreadCounts);
+      if (isMounted) {
+        setUnreadCounts(newUnreadCounts);
+      }
     };
 
+    // Only fetch if we don't have parent counts
     fetchUnreadCounts();
     const interval = setInterval(fetchUnreadCounts, 5000);
 
-    //  Subscribe to read receipt events for each room
-    const subscriptions = {};
-    conversations
-      .filter((c) => c.type === "group")
-      .forEach((room) => {
-        const subscription = subscribeToReadReceipt(
-          room.roomId,
-          (readReceipt) => {
-            if (readReceipt.receiptType === "ROOM") {
-              setUnreadCounts((prev) => ({
-                ...prev,
-                [room.id]: Math.max(
-                  0,
-                  (prev[room.id] || 0) - readReceipt.markedCount
-                ),
-              }));
-            }
-          }
-        );
-        subscriptions[room.id] = subscription;
-      });
+    //  Subscribe to read receipt events for each room - wait for WebSocket first
+    const subscribeToReadReceipts = async () => {
+      // Wait for WebSocket connection
+      const isConnected = await waitForWebSocketConnection(10000);
+      if (!isMounted || !isConnected) {
+        console.warn(" WebSocket not ready for read receipt subscriptions");
+        return;
+      }
 
-    readReceiptSubscriptionsRef.current = subscriptions;
+      const subscriptions = {};
+      conversations
+        .filter((c) => c.type === "group")
+        .forEach((room) => {
+          const subscription = subscribeToReadReceipt(
+            room.roomId,
+            (readReceipt) => {
+              if (!isMounted) return;
+
+              if (readReceipt.receiptType === "ROOM") {
+                setUnreadCounts((prev) => ({
+                  ...prev,
+                  [room.id]: Math.max(
+                    0,
+                    (prev[room.id] || 0) - readReceipt.markedCount
+                  ),
+                }));
+              }
+            }
+          );
+          subscriptions[room.id] = subscription;
+        });
+
+      if (isMounted) {
+        readReceiptSubscriptionsRef.current = subscriptions;
+      }
+    };
+
+    subscribeToReadReceipts();
 
     return () => {
+      isMounted = false;
       clearInterval(interval);
       Object.values(readReceiptSubscriptionsRef.current).forEach((sub) => {
         if (sub?.unsubscribe) {
@@ -333,7 +507,20 @@ const ConversationList = ({
         }
       });
     };
-  }, [conversations]);
+  }, [conversations, parentUnreadCounts]);
+
+  // Cleanup all subscriptions on unmount
+  useEffect(() => {
+    return () => {
+      // Cleanup room subscriptions
+      Object.values(roomSubscriptionsRef.current).forEach((sub) => {
+        if (sub?.unsubscribe) {
+          sub.unsubscribe();
+        }
+      });
+      roomSubscriptionsRef.current = {};
+    };
+  }, []);
 
   const filteredConversations = conversations.filter((conv) => {
     const matchesTab =

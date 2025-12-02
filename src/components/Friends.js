@@ -222,13 +222,13 @@ const Friends = () => {
                       <div
                         className={`status-indicator ${
                           friend.status === "ONLINE" &&
-                          friend.showOnlineStatus !== false
+                          friend.showOnlineStatus === true
                             ? "online"
                             : "offline"
                         }`}
                         title={
                           friend.status === "ONLINE" &&
-                          friend.showOnlineStatus !== false
+                          friend.showOnlineStatus === true
                             ? "Online"
                             : "Offline"
                         }
@@ -239,7 +239,7 @@ const Friends = () => {
                       <p>@{friend.username}</p>
                       <span className="friend-status">
                         {friend.status === "ONLINE" &&
-                        friend.showOnlineStatus !== false ? (
+                        friend.showOnlineStatus === true ? (
                           <span className="online-badge">Online</span>
                         ) : (
                           <span className="offline-badge">Offline</span>
@@ -271,55 +271,71 @@ const Friends = () => {
           ) : (
             <div className="pending-list">
               {pendingRequests.map((invite) => (
-                <div key={invite.id} className="pending-item">
-                  <div className="pending-avatar">
-                    {invite.user.avatarUrl ? (
-                      <img
-                        src={getFullAvatarUrl(invite.user.avatarUrl)}
-                        alt={invite.user.displayName}
-                        onError={(e) => {
-                          console.warn(
-                            "❌ Pending avatar failed to load:",
-                            invite.user.avatarUrl
-                          );
-                          e.target.style.display = "none";
-                          if (e.target.nextSibling) {
-                            e.target.nextSibling.style.display = "flex";
-                          }
-                        }}
-                      />
-                    ) : null}
-                    <div
-                      className="avatar-placeholder-friends"
-                      style={{
-                        display: invite.user.avatarUrl ? "none" : "flex",
-                      }}
-                    >
-                      {invite.user.displayName?.charAt(0).toUpperCase()}
+                <div key={invite.id} className="pending-item-card">
+                  <div className="pending-badge">Lời mời kết bạn</div>
+                  <div className="pending-card-content">
+                    <div className="pending-avatar-section">
+                      <div className="pending-avatar">
+                        {invite.user.avatarUrl ? (
+                          <img
+                            src={getFullAvatarUrl(invite.user.avatarUrl)}
+                            alt={invite.user.displayName}
+                            onError={(e) => {
+                              console.warn(
+                                "❌ Pending avatar failed to load:",
+                                invite.user.avatarUrl
+                              );
+                              e.target.style.display = "none";
+                              if (e.target.nextSibling) {
+                                e.target.nextSibling.style.display = "flex";
+                              }
+                            }}
+                          />
+                        ) : null}
+                        <div
+                          className="avatar-placeholder-friends"
+                          style={{
+                            display: invite.user.avatarUrl ? "none" : "flex",
+                          }}
+                        >
+                          {invite.user.displayName?.charAt(0).toUpperCase()}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="pending-info">
+                      <h4>{invite.user.displayName}</h4>
+                      <p className="pending-username">
+                        @{invite.user.username}
+                      </p>
+                      <div className="pending-meta">
+                        <span className="pending-date">
+                          {new Date(invite.createdAt).toLocaleDateString(
+                            "vi-VN",
+                            {
+                              month: "short",
+                              day: "numeric",
+                            }
+                          )}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                  <div className="pending-info">
-                    <h4>{invite.user.displayName}</h4>
-                    <p>@{invite.user.username}</p>
-                    <small>
-                      Gửi lời mời vào{" "}
-                      {new Date(invite.createdAt).toLocaleDateString("vi-VN")}
-                    </small>
-                  </div>
-                  <div className="pending-actions">
+                  <div className="pending-actions-container">
                     <button
                       className="btn-accept-pending"
                       onClick={() => handleAcceptRequest(invite.id)}
-                      title="Chấp nhận"
+                      title="Chấp nhận lời mời"
                     >
-                      ✅
+                      <span className="btn-icon">✓</span>
+                      <span className="btn-text">Chấp nhận</span>
                     </button>
                     <button
                       className="btn-decline-pending"
                       onClick={() => handleDeclineRequest(invite.id)}
-                      title="Từ chối"
+                      title="Từ chối lời mời"
                     >
-                      ❌
+                      <span className="btn-icon">✕</span>
+                      <span className="btn-text">Từ chối</span>
                     </button>
                   </div>
                 </div>

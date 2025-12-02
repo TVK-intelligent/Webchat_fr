@@ -2,23 +2,19 @@ import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "../context/AuthContext";
 import { messageService } from "../services/api";
 import {
-  subscribeToPrivateMessages,
   sendPrivateMessage,
   sendPrivateTypingIndicator,
   waitForWebSocketConnection,
   recallPrivateMessage,
   subscribeToPrivateMessageRecall,
 } from "../services/websocket";
+import { usePrivateMessageListener } from "../hooks/usePrivateMessageListener";
+import { notifyNewPrivateMessage } from "../services/pushNotificationIntegration";
 import EmojiPicker from "emoji-picker-react";
 import { getFullAvatarUrl } from "../utils/avatarUtils";
 import "../styles/PrivateChatConversation.css";
 
-const PrivateChatConversation = ({
-  friend,
-  onBack,
-  onUnreadCleared,
-  onMessageSent,
-}) => {
+const PrivateChatConversation = ({ friend, onBack, onUnreadCleared }) => {
   const { user } = useAuth();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
@@ -34,6 +30,63 @@ const PrivateChatConversation = ({
   useEffect(() => {
     onUnreadClearedRef.current = onUnreadCleared;
   }, [onUnreadCleared]);
+
+  // Mark all messages as read IMMEDIATELY when entering conversation
+  useEffect(() => {
+    console.log("[PRIVATE_CHAT] Conversation opened for friend:", friend?.id);
+
+    const markAsReadImmediately = async () => {
+      try {
+        if (!friend?.id) {
+          console.warn("[PRIVATE_CHAT] Friend ID is missing");
+          return;
+        }
+        console.log(
+          "[PRIVATE_CHAT] Marking all messages as read with friend",
+          friend.id
+        );
+
+        // Try to mark all as read (bulk operation)
+        try {
+          await messageService.markAllPrivateAsRead(friend.id);
+          console.log(
+            "[PRIVATE_CHAT] ✅ Immediately marked all messages as read (bulk)"
+          );
+        } catch (bulkError) {
+          console.warn(
+            "[PRIVATE_CHAT] ⚠️ Bulk mark-as-read failed, falling back to individual messages:",
+            bulkError?.message
+          );
+          // Fallback: mark each message individually
+          for (const msg of messages) {
+            if (!msg.isRead && msg.senderId === friend.id) {
+              try {
+                await messageService.markAsRead(msg.id);
+              } catch (err) {
+                console.warn(`Failed to mark message ${msg.id} as read:`, err);
+              }
+            }
+          }
+        }
+
+        // Call callback to clear badge
+        if (onUnreadClearedRef.current) {
+          const conversationId = `private_${friend.id}`;
+          console.log(
+            `[PRIVATE_CHAT] Calling onUnreadCleared for: ${conversationId}`
+          );
+          onUnreadClearedRef.current(conversationId);
+        }
+      } catch (error) {
+        console.error(
+          "[PRIVATE_CHAT] Error marking all messages as read:",
+          error
+        );
+      }
+    };
+
+    markAsReadImmediately();
+  }, [friend?.id, messages]);
 
   // Load messages
   useEffect(() => {
@@ -87,42 +140,138 @@ const PrivateChatConversation = ({
     loadMessages();
   }, [friend]);
 
-  // Subscribe to private messages
-  useEffect(() => {
-    const subscription = subscribeToPrivateMessages(user.id, (newMessage) => {
-      console.log("Private message received:", newMessage);
-      if (
-        newMessage.senderId === friend.id ||
-        newMessage.recipientId === friend.id
-      ) {
-        // Đảm bảo có senderUsername và senderDisplayName
-        // Priority: senderDisplayName > sender.displayName > senderUsername > "Unknown"
-        const displayName =
-          newMessage.senderDisplayName ||
-          newMessage.sender?.displayName ||
-          newMessage.senderUsername ||
-          newMessage.sender?.username ||
-          "Unknown";
-        const username =
-          newMessage.senderUsername || newMessage.sender?.username || "Unknown";
+  // Subscribe to private messages using the global listener hook
+  usePrivateMessageListener(user.id, (newMessage) => {
+    console.log("🔔 [PRIVATE_CHAT_HOOK_CALLBACK] Hook callback triggered!");
+    console.log(
+      "🔔 [PRIVATE_CHAT_HOOK_CALLBACK] Message received:",
+      newMessage
+    );
+    console.log(
+      `🔔 [PRIVATE_CHAT_HOOK_CALLBACK] Checking: senderId=${newMessage.senderId} vs friend.id=${friend.id}`
+    );
 
-        const messageWithMetadata = {
-          ...newMessage,
-          timestamp: newMessage.timestamp || new Date().toISOString(),
-          senderDisplayName: displayName,
-          senderUsername: username,
-        };
-        console.log("Saving message with metadata:", messageWithMetadata);
-        setMessages((prev) => [...prev, messageWithMetadata]);
-      }
-    });
+    // Key debug: check if we're in the right conversation
+    const isFromThisConversation =
+      newMessage.senderId === friend.id || newMessage.recipientId === friend.id;
+    console.log(
+      `🔔 [PRIVATE_CHAT_HOOK_CALLBACK] isFromThisConversation=${isFromThisConversation}`
+    );
 
-    return () => {
-      if (subscription?.unsubscribe) {
-        subscription.unsubscribe();
+    if (isFromThisConversation) {
+      console.log(`   ✅ Message matches this conversation`);
+      // Đảm bảo có senderUsername và senderDisplayName
+      // Priority: senderDisplayName > sender.displayName > senderUsername > "Unknown"
+      const displayName =
+        newMessage.senderDisplayName ||
+        newMessage.sender?.displayName ||
+        newMessage.senderUsername ||
+        newMessage.sender?.username ||
+        "Unknown";
+      const username =
+        newMessage.senderUsername || newMessage.sender?.username || "Unknown";
+
+      const messageWithMetadata = {
+        ...newMessage,
+        timestamp: newMessage.timestamp || new Date().toISOString(),
+        senderDisplayName: displayName,
+        senderUsername: username,
+      };
+      console.log("Saving message with metadata:", messageWithMetadata);
+
+      // Check if message already exists (to avoid duplicate from optimistic + server response)
+      setMessages((prev) => {
+        // Check if message with same ID exists
+        const exists = prev.some(
+          (msg) => String(msg.id) === String(newMessage.id)
+        );
+        if (exists) {
+          console.log(
+            `📌 Message ${newMessage.id} already exists, skipping duplicate`
+          );
+          return prev;
+        }
+
+        // Also check if it's an optimistic message (temporary ID = Date.now())
+        // and the new message has very similar content
+        const isDuplicate = prev.some(
+          (msg) =>
+            msg.senderId === newMessage.senderId &&
+            msg.content === newMessage.content &&
+            msg.id !== newMessage.id
+        );
+
+        if (isDuplicate) {
+          console.log(
+            `📌 Duplicate detected: replacing optimistic with server response`
+          );
+          // Remove the optimistic message (temp ID) and add the real one
+          return [
+            ...prev.filter(
+              (msg) =>
+                !(
+                  msg.senderId === newMessage.senderId &&
+                  msg.content === newMessage.content &&
+                  msg.id !== newMessage.id
+                )
+            ),
+            messageWithMetadata,
+          ];
+        }
+
+        return [...prev, messageWithMetadata];
+      });
+
+      // Send push notification if sender is not the current user
+      const isFromOther = newMessage.senderId !== user.id;
+      const isTabHidden = document.hidden;
+
+      console.log(
+        `[PRIVATE_CHAT] Push notification check:`,
+        `isFromOther=${isFromOther}, isTabHidden=${isTabHidden}`
+      );
+
+      if (isFromOther && isTabHidden) {
+        console.log("📬 Sending push notification for private message");
+        notifyNewPrivateMessage(
+          newMessage.senderId,
+          displayName,
+          newMessage.content
+        );
+      } else {
+        console.log(
+          `[PRIVATE_CHAT] ❌ Push notification NOT sent: isFromOther=${isFromOther}, isTabHidden=${isTabHidden}`
+        );
       }
-    };
-  }, [friend.id, user.id]);
+
+      // Mark this new message as read immediately
+      messageService
+        .markAsRead(newMessage.id)
+        .then(() => {
+          console.log(`[PRIVATE_CHAT] Message ${newMessage.id} marked as read`);
+          // Clear badge in parent when message is read
+          console.log(
+            `[PRIVATE_CHAT] Checking: senderId=${
+              newMessage.senderId
+            }, friend.id=${friend.id}, callback=${!!onUnreadClearedRef.current}`
+          );
+          if (onUnreadClearedRef.current) {
+            const conversationId = `private_${friend.id}`;
+            console.log(
+              `[PRIVATE_CHAT] ✅ Calling onUnreadCleared with: ${conversationId}`
+            );
+            onUnreadClearedRef.current(conversationId);
+          } else {
+            console.warn(
+              `[PRIVATE_CHAT] ❌ onUnreadClearedRef.current is null!`
+            );
+          }
+        })
+        .catch((error) =>
+          console.warn("Failed to mark received message as read:", error)
+        );
+    }
+  });
 
   //  Subscribe to private message recall events
   useEffect(() => {
@@ -211,33 +360,71 @@ const PrivateChatConversation = ({
     };
   }, [user.id]);
 
-  //  Mark messages as read - separate effect to avoid loop
+  //  Mark messages as read - run once when friend changes
   useEffect(() => {
+    let isMounted = true;
+
     const markMessagesAsRead = async () => {
       try {
-        const unreadMessages = messages.filter(
-          (msg) => msg.senderId === friend.id && !msg.isRead
+        if (!friend?.id) {
+          console.log("[MARK_AS_READ] No friend ID");
+          return;
+        }
+
+        console.log(
+          `[MARK_AS_READ] Starting to mark messages as read for friend ${friend.id}`
         );
-        if (unreadMessages.length > 0) {
-          for (const msg of unreadMessages) {
-            await messageService.markAsRead(msg.id);
-          }
-          //  Notify parent to clear badge with conversationId format
-          if (onUnreadClearedRef.current) {
-            const conversationId = `private_${friend.id}`;
-            console.log("Calling onUnreadCleared with:", conversationId);
-            onUnreadClearedRef.current(conversationId);
+
+        // Get all messages from this friend
+        const messagesToMark = messages.filter(
+          (msg) => msg.senderId === friend.id
+        );
+
+        console.log(
+          `[MARK_AS_READ] Found ${messagesToMark.length} messages from friend`
+        );
+
+        if (messagesToMark.length > 0) {
+          // Mark all messages from this friend as read on the server
+          for (const msg of messagesToMark) {
+            if (!isMounted) break;
+            try {
+              await messageService.markAsRead(msg.id);
+              console.log(`[MARK_AS_READ] Marked message ${msg.id} as read`);
+            } catch (error) {
+              console.warn(`Warning marking message ${msg.id} as read:`, error);
+            }
           }
         }
+
+        // Always notify parent to clear badge when opening the chat
+        if (isMounted && onUnreadClearedRef.current) {
+          const conversationId = `private_${friend.id}`;
+          console.log(
+            `[MARK_AS_READ] Calling onUnreadCleared with: ${conversationId}`
+          );
+          onUnreadClearedRef.current(conversationId);
+        }
       } catch (error) {
-        console.error("Error marking messages as read:", error);
+        console.error("[MARK_AS_READ] Error:", error);
       }
     };
 
-    if (messages.length > 0) {
-      markMessagesAsRead();
-    }
-  }, [messages, friend.id]);
+    // Wait a bit for messages to load, then mark as read
+    const timer = setTimeout(() => {
+      if (isMounted) {
+        markMessagesAsRead();
+      }
+    }, 100);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+    // Only depend on friend.id to avoid infinite loops
+    // The effect will run every time friend changes, which is what we want
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [friend?.id]);
 
   // Scroll to bottom
   useEffect(() => {
@@ -273,14 +460,26 @@ const PrivateChatConversation = ({
     setInput("");
     setShowEmojiPicker(false);
 
-    //  Notify parent that message was sent (move conversation to top)
-    if (onMessageSent) {
-      onMessageSent("direct", friend.id);
-    }
-
     try {
       const isConnected = await waitForWebSocketConnection(5000);
       if (isConnected) {
+        // 1. Create optimistic message
+        const optimisticMessage = {
+          id: Date.now(), // Temporary ID
+          senderId: user.id,
+          recipientId: friend.id,
+          content: messageContent,
+          timestamp: new Date().toISOString(),
+          senderDisplayName: user.displayName,
+          senderUsername: user.username,
+          recalled: false,
+        };
+
+        // 2. Add optimistic message to UI immediately
+        setMessages((prev) => [...prev, optimisticMessage]);
+        console.log("📌 Added optimistic message:", optimisticMessage);
+
+        // 3. Send actual message via WebSocket
         sendPrivateMessage(user.id, friend.id, messageContent);
         console.log("Message sent to", friend.displayName);
       } else {
@@ -380,10 +579,22 @@ const PrivateChatConversation = ({
                 {friend.displayName?.charAt(0).toUpperCase()}
               </div>
             )}
+            <div
+              className={`status-indicator-header ${
+                friend.status === "ONLINE" && friend.showOnlineStatus === true
+                  ? "online"
+                  : "offline"
+              }`}
+            />
           </div>
           <div className="header-details">
             <h3>{friend.displayName}</h3>
             <p>@{friend.username}</p>
+            <span className="header-status">
+              {friend.status === "ONLINE" && friend.showOnlineStatus === true
+                ? "🟢 Online"
+                : "⚫ Offline"}
+            </span>
           </div>
         </div>
       </div>

@@ -113,25 +113,52 @@ class NotificationAudioService {
   /**
    * Internal method to play a sound from a given audio instance
    * Handles pause, reset, and play with promise handling
+   * Resets audio element after playback to ensure multiple plays work
    */
   playAudio(audio) {
     try {
+      console.log("[AUDIO] Starting playAudio - audio element:", audio);
+      console.log("[AUDIO] Audio src:", audio?.src);
+      console.log("[AUDIO] Audio volume:", audio?.volume);
+      console.log("[AUDIO] Audio enabled:", this.isEnabled);
+
       // Always pause and reset first to ensure clean playback
       audio.pause();
       audio.currentTime = 0;
+
+      console.log("[AUDIO] After pause/reset - attempting to play");
+
+      // Remove any previous event listeners to avoid stacking
+      audio.onended = null;
+      audio.onerror = null;
+
+      // Handler called when audio finishes playing
+      const onAudioEnded = () => {
+        console.log("[AUDIO] ✅ Audio playback completed");
+      };
+
+      // Handler for playback errors
+      const onAudioError = () => {
+        console.error("[AUDIO] ❌ Audio playback error");
+      };
+
+      audio.onended = onAudioEnded;
+      audio.onerror = onAudioError;
 
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         playPromise
           .then(() => {
-            console.log("Audio played successfully");
+            console.log("✅ [AUDIO] Audio playback started successfully");
           })
           .catch((err) => {
-            console.warn("Audio playback blocked or failed:", err);
+            console.warn("❌ [AUDIO] Audio playback blocked or failed:", err);
           });
+      } else {
+        console.log("⚠️ [AUDIO] play() returned undefined - old browser");
       }
     } catch (error) {
-      console.error("Error playing audio:", error);
+      console.error("❌ [AUDIO] Error playing audio:", error);
     }
   }
 
@@ -164,29 +191,39 @@ class NotificationAudioService {
   /**
    * Generic sound play (non-pool)
    * Checks isEnabled before playing
+   * Creates a NEW audio instance each time to ensure multiple plays work
    */
   playGenericSound(notificationType) {
+    console.log(`[AUDIO] playGenericSound called for: ${notificationType}`);
+    console.log(`[AUDIO] isEnabled: ${this.isEnabled}`);
+
     if (!this.isEnabled) {
-      console.log("Notification audio is disabled");
+      console.log("[AUDIO] ❌ Notification audio is disabled");
       return;
     }
 
     if (!this.soundUrls[notificationType]) {
-      console.error("Unknown sound type:", notificationType);
+      console.error("[AUDIO] Unknown sound type:", notificationType);
       return;
     }
 
-    if (!this.audioInstances[notificationType]) {
-      const audio = new Audio();
-      audio.preload = "auto";
-      audio.src = this.soundUrls[notificationType];
-      audio.volume = this.volume;
-      this.audioInstances[notificationType] = audio;
-    }
+    // Always create a NEW audio instance for each play
+    // This ensures multiple successive plays work correctly
+    console.log(`[AUDIO] Creating NEW Audio instance for ${notificationType}`);
+    const audio = new Audio();
+    audio.preload = "auto";
+    audio.src = this.soundUrls[notificationType];
+    audio.volume = this.volume;
 
-    const audio = this.audioInstances[notificationType];
-    console.log(`Playing ${notificationType} sound`);
+    console.log(
+      `[AUDIO] Audio instance created - src: ${audio.src}, volume: ${audio.volume}`
+    );
+    console.log(`[AUDIO] ▶️ Playing ${notificationType} sound`);
+
     this.playAudio(audio);
+
+    // Also store as backup in case it's needed later
+    this.audioInstances[notificationType] = audio;
   }
 
   /**

@@ -6,6 +6,7 @@
 
 import { roomInviteService } from "./api";
 import { notificationAudioService } from "./notificationAudioService";
+import { notifyRoomInvite } from "./pushNotificationIntegration";
 
 class RoomInviteNotificationService {
   constructor() {
@@ -95,6 +96,26 @@ class RoomInviteNotificationService {
             console.log("Room invite sound triggered successfully");
           } catch (error) {
             console.error("Error playing room invite sound:", error);
+          }
+
+          // 📬 Gửi push notification nếu tab bị ẩn
+          const isTabHidden = document.hidden;
+          console.log(
+            `[ROOM_INVITE] Push notification check: isTabHidden=${isTabHidden}`
+          );
+
+          if (isTabHidden) {
+            console.log("📬 Sending push notification for room invite");
+            notifyRoomInvite(
+              invite.roomId,
+              roomName,
+              invite.inviter?.id,
+              inviterName
+            );
+          } else {
+            console.log(
+              `[ROOM_INVITE] ❌ Push notification NOT sent: tab is visible`
+            );
           }
 
           //  Mark đã phát cho invite này

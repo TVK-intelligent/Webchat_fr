@@ -19,7 +19,7 @@ export const getFullAvatarUrl = (avatarUrl, addTimestamp = false) => {
   if (avatarUrl.startsWith("http")) {
     fullUrl = avatarUrl;
   } else if (avatarUrl.includes("/uploads/avatars/")) {
-    // Convert old format /uploads/avatars/uuid.png to new API endpoint
+    // Convert /uploads/avatars/uuid.png to /api/avatars/uuid.png (use public endpoint)
     const filename = avatarUrl.split("/uploads/avatars/")[1];
     fullUrl = `${API_BASE_URL}/api/avatars/${filename}`;
   } else {
